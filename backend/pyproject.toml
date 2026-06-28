@@ -1,0 +1,27 @@
+[project]
+name = "eidos-backend"
+version = "0.0.0"
+description = "Eidos backend — classical computer vision, grown one historical milestone per year."
+requires-python = ">=3.12"
+
+[tool.ruff]
+# Keep lines readable; match a common, unfussy width.
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# A pragmatic, not overwhelming, rule set for a learner:
+# E/W pycodestyle, F pyflakes, I import sorting, UP pyupgrade, B bugbear.
+select = ["E", "W", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.12"
+# Start strict-ish but not punishing. We can tighten as the codebase grows.
+warn_unused_configs = true
+warn_return_any = true
+disallow_untyped_defs = true
+ignore_missing_imports = true   # third-party stubs (cv2, etc.) are incomplete
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

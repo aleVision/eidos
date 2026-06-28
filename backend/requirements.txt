@@ -1,0 +1,24 @@
+# Web framework + server. FastAPI is 0.x semver, so pin a narrow range:
+# minor releases can introduce breaking changes.
+fastapi[standard]>=0.136.0,<0.137.0
+uvicorn[standard]>=0.34.0,<0.35.0
+
+# Data validation (FastAPI uses Pydantic v2 under the hood).
+pydantic>=2.10,<3.0
+pydantic-settings>=2.7,<3.0
+
+# Database
+SQLAlchemy>=2.0,<2.1
+
+# Computer vision foundation (used from V1 onward, not yet in the scaffold).
+numpy>=2.1,<3.0
+Pillow>=11.0,<12.0
+opencv-python-headless>=4.10,<5.0
+
+# Testing
+pytest>=8.3,<9.0
+httpx>=0.28,<0.29        # test client for the API
+
+# Tooling
+ruff>=0.8,<1.0
+mypy>=1.13,<2.0
