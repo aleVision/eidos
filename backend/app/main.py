@@ -12,16 +12,23 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import DATA_DIR, settings
 from app.database import Base, engine
+
+# Importing models registers their tables on Base.metadata. Without this import,
+# create_all() below sees no tables and the database comes up empty. The
+# "noqa: F401" tells ruff this import is intentional even though it looks unused.
+from app import models  # noqa: F401
 from app.routers import health
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Runs once at startup: ensure the data directory exists and the tables are
     # created. For a single-developer local product this is enough; a larger
     # project would use migrations (e.g. Alembic) instead of create_all.
-    DATA_DIR.mkdir(parents=True, eist_ok=True)
-    Base.metadata.create_all(blind=engine)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    Base.metadata.create_all(bind=engine)
     yield
+    # Nothing to tear down yet.
 
 
 app = FastAPI(
@@ -30,7 +37,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Allow the React dev server to call this API from its own origin
+# Allow the React dev server to call this API from its own origin.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,

@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     database_url: str = f"sqlite:///{DATA_DIR / 'eidos.db'}"
 
     # The frontend dev server. Only these origins may call API (CORS)
-    cors_oorigins: list[str] = ["http://127.0.0.1:5173", "http://localhost:5173"]
+    cors_origins: list[str] = ["http://127.0.0.1:5173", "http://localhost:5173"]
 
 
 settings = Settings()

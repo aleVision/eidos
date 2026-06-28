@@ -19,6 +19,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
