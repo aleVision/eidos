@@ -1,20 +1,17 @@
 """Database models.
 
-These define *what we store*, not *how recognition works*. The CV logic lives
-in eidos_core and arrives in the next step. For now we model the two core
-entities the product revolves around:
+These define *what we store*, not *how recognition works*; the CV logic lives
+in eidos_core.
 
 - Person:     someone the user has enrolled (e.g. "Ana").
-- FaceSample: one enrolled face image belonging to a Person.
-
-The marked face region (the box the user draws by hand in V1) is stored on the
-sample so we can crop consistently later. It is nullable now because the
-scaffold creates no rows yet.
+- FaceSample: one enrolled face image belonging to a Person, with the face box
+              the user drew by hand (V1 has no automatic detection).
+- ModelRun:   one training of the eigenface model and its thresholds.
 """
 
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -29,6 +26,8 @@ class Person(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
+    # Demo people come from the public ORL dataset and are kept apart from real ones.
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     samples: Mapped[list["FaceSample"]] = relationship(
@@ -45,16 +44,31 @@ class FaceSample(Base):
         ForeignKey("people.id", ondelete="CASCADE"), nullable=False
     )
 
-    # Path to the stored image file on disk (images are not kept in the DB).
+    # File name inside settings.images_dir (images are not kept in the DB).
     image_path: Mapped[str] = mapped_column(String(500), nullable=False)
 
     # The user-marked face box: top-left corner plus width/height, in pixels.
-    # Nullable for now; populated once enrollment exists.
-    box_x: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    box_y: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    box_w: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    box_h: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    box_x: Mapped[int] = mapped_column(Integer, nullable=False)
+    box_y: Mapped[int] = mapped_column(Integer, nullable=False)
+    box_w: Mapped[int] = mapped_column(Integer, nullable=False)
+    box_h: Mapped[int] = mapped_column(Integer, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     person: Mapped[Person] = relationship(back_populates="samples")
+
+
+class ModelRun(Base):
+    """One training of the eigenface model. The latest run is the active model."""
+
+    __tablename__ = "model_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    n_people: Mapped[int] = mapped_column(Integer, nullable=False)
+    n_samples: Mapped[int] = mapped_column(Integer, nullable=False)
+    n_components: Mapped[int] = mapped_column(Integer, nullable=False)
+    theta_person: Mapped[float] = mapped_column(Float, nullable=False)
+    theta_face: Mapped[float] = mapped_column(Float, nullable=False)
+    # File name of the saved model inside settings.models_dir.
+    path: Mapped[str] = mapped_column(String(500), nullable=False)

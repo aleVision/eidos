@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import models  # noqa: F401
 from app.config import DATA_DIR, settings
 from app.database import Base, engine
-from app.routers import health
+from app.routers import health, people
 
 
 @asynccontextmanager
@@ -26,6 +26,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # created. For a single-developer local product this is enough; a larger
     # project would use migrations (e.g. Alembic) instead of create_all.
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    for folder in (settings.images_dir, settings.models_dir, settings.datasets_dir):
+        folder.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
     yield
     # Nothing to tear down yet.
@@ -47,3 +49,4 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
+app.include_router(people.router)
