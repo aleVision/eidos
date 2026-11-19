@@ -60,3 +60,38 @@ class ModelOut(BaseModel):
     theta_face: float
     explained_variance: list[float]
     stale: bool
+
+
+class PersonDistance(BaseModel):
+    person_id: int
+    name: str
+    distance: float
+
+
+class ThresholdsOut(BaseModel):
+    person: float
+    face_space: float
+
+
+class RecognitionOut(BaseModel):
+    outcome: str  # "known" | "unknown_face" | "not_a_face"
+    quadrant: int  # 1-4, as numbered by Turk & Pentland
+    nearest: PersonDistance
+    face_space_distance: float
+    distances: list[PersonDistance]
+    thresholds: ThresholdsOut
+    weights: list[float]
+    input_png: str  # data URL of the prepared face Γ
+    projection_png: str  # data URL of its projection onto face space
+    stale: bool
+
+
+class DemoLoaded(BaseModel):
+    people_added: int
+
+
+class TestPhoto(BaseModel):
+    subject: int
+    index: int
+    enrolled: bool
+    url: str
