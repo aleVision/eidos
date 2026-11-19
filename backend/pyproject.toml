@@ -1,7 +1,7 @@
 [project]
 name = "eidos-backend"
-version = "0.0.0"
-description = "Eidos backend — classical computer vision, grown one historical milestone per year."
+version = "1.0.0"
+description = "Eidos backend — a computer vision product that grows one historical milestone per year."
 requires-python = ">=3.12"
 
 [tool.ruff]
@@ -25,3 +25,5 @@ ignore_missing_imports = true   # third-party stubs (cv2, etc.) are incomplete
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+addopts = "-m 'not dataset'"
+markers = ["dataset: needs the real ORL download (network)"]

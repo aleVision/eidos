@@ -1,63 +1,64 @@
 import { useEffect, useState } from "react";
 import { getHealth } from "./api/client";
+import ModelView from "./views/ModelView";
+import PeopleView from "./views/PeopleView";
+import RecognizeView from "./views/RecognizeView";
 
 type Status =
   | { kind: "checking" }
-  | { kind: "ok"; app: string; version: string }
+  | { kind: "ok"; version: string }
   | { kind: "error"; message: string };
+
+const TABS = [
+  { id: "people", label: "People" },
+  { id: "model", label: "How it works" },
+  { id: "recognize", label: "Recognize" },
+] as const;
+type Tab = (typeof TABS)[number]["id"];
 
 export default function App() {
   const [status, setStatus] = useState<Status>({ kind: "checking" });
+  const [tab, setTab] = useState<Tab>("people");
 
   useEffect(() => {
     getHealth()
-      .then((h) => setStatus({ kind: "ok", app: h.app, version: h.version }))
+      .then((h) => setStatus({ kind: "ok", version: h.version }))
       .catch((e: unknown) =>
-        setStatus({
-          kind: "error",
-          message: e instanceof Error ? e.message : "Could not reach the backend",
-        })
+        setStatus({ kind: "error", message: e instanceof Error ? e.message : "unreachable" })
       );
   }, []);
 
   return (
-    <main
-      style={{
-        fontFamily: "system-ui, sans-serif",
-        maxWidth: 560,
-        margin: "10vh auto",
-        padding: "0 1.5rem",
-        lineHeight: 1.6,
-      }}
-    >
-      <h1 style={{ marginBottom: "0.25rem" }}>Eidos</h1>
-      <p style={{ marginTop: 0, color: "#555" }}>
-        Classical computer vision, grown one milestone per year.
-      </p>
+    <main className="app">
+      <header className="topbar">
+        <div className="brand">
+          <h1>
+            Eid<span>os</span>
+          </h1>
+          <span className="small muted">
+            Eigenfaces · Turk &amp; Pentland, 1991
+            {status.kind === "ok" && ` · v${status.version}`}
+          </span>
+        </div>
+        <nav className="tabs" aria-label="Sections">
+          {TABS.map((t) => (
+            <button key={t.id} aria-current={tab === t.id ? "page" : undefined} onClick={() => setTab(t.id)}>
+              {t.label}
+            </button>
+          ))}
+        </nav>
+      </header>
 
-      <section
-        style={{
-          marginTop: "2rem",
-          padding: "1rem 1.25rem",
-          border: "1px solid #ddd",
-          borderRadius: 8,
-        }}
-      >
-        {status.kind === "checking" && <p>Checking backend…</p>}
+      {status.kind === "error" && (
+        <p className="notice error" role="alert">
+          Backend unreachable ({status.message}). Start it with <code>fastapi dev app/main.py</code>{" "}
+          in the backend folder.
+        </p>
+      )}
 
-        {status.kind === "ok" && (
-          <p>
-            Backend connected — {status.app} v{status.version}.
-          </p>
-        )}
-
-        {status.kind === "error" && (
-          <p style={{ color: "#b00020" }}>
-            Backend unreachable: {status.message}. Start it with{" "}
-            <code>fastapi dev app/main.py</code> in the backend folder.
-          </p>
-        )}
-      </section>
+      {tab === "people" && <PeopleView />}
+      {tab === "model" && <ModelView />}
+      {tab === "recognize" && <RecognizeView />}
     </main>
   );
 }
