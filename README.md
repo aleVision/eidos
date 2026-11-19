@@ -4,7 +4,14 @@ A computer vision product that grows one historical milestone per year.
 
 Each major version of Eidos adds a working feature built on an important computer vision development from a successive year: version 1 brings 1991, version 2 brings 1992, and so on. Every feature is implemented from the original idea and explains itself in the interface, so you can see *how* it works, not only *that* it works. Eidos runs entirely on your own machine.
 
-## Version 1.1 — 1991: Eigenfaces
+The interface is a timeline: pick a year, use that year's milestone.
+
+| Year | Milestone | Since |
+|------|-----------|-------|
+| 1991 | Eigenfaces: recognize and find faces | 1.0.0 |
+| 1992 | Total variation: remove noise, keep edges | 2.0.0 |
+
+## 1991: Eigenfaces
 
 Based on M. Turk and A. Pentland, "Eigenfaces for Recognition", *Journal of Cognitive Neuroscience* 3(1):71–86, 1991.
 
@@ -12,6 +19,16 @@ Based on M. Turk and A. Pentland, "Eigenfaces for Recognition", *Journal of Cogn
 - **How it works**: train the model, then see the mean face, the eigenfaces, how much variation they explain, and a face rebuilt from k eigenfaces.
 - **Recognize**: get one of the paper's four outcomes (known person, unknown face, not a face) with both distances, and move the two thresholds to see the trade-off.
 - **Face detection** (1.1.0): the face map ε(x, y) suggests where the face is. By default each box is normalized for brightness and contrast first (not in the 1991 paper; the paper's raw ε is selectable for comparison).
+
+## 1992: Total variation denoising
+
+Based on L. I. Rudin, S. Osher and E. Fatemi, "Nonlinear total variation based noise removal algorithms", *Physica D* 60:259–268, 1992.
+
+- Of all images close to the noisy photo, keep the one whose brightness changes least overall: noise goes, edges stay sharp.
+- Upload a photo or use the synthetic sample (with adjustable noise), move the strength slider, and compare before/after with a draggable divider. See the noise that was removed and the energy falling per iteration.
+- Download the cleaned photo as PNG (up to 2048 px on the longer side, about 20 s).
+- Model 1992 · solver 2004: the minimum is found with Chambolle's dual algorithm, checked in the tests against the paper's gradient flow.
+- Limits: strong settings cause "staircasing" (gradients become flat steps) and lower the contrast of small details.
 
 ## Architecture
 
@@ -67,6 +84,8 @@ Open http://127.0.0.1:5173.
 3. **Recognize** → click any ORL test photo, or upload your own photo.
 4. When you upload a photo, click **Enable face detection** once: from then on Eidos suggests the face box (check it, or drag to redraw). Tick **Show face map** to see ε at every position.
 
+For 1992, choose **1992 · Total variation** in the timeline and click **Use the sample**.
+
 ### Tests and checks
 
 ```bash
@@ -90,7 +109,8 @@ Settings can be overridden with `EIDOS_*` environment variables or `backend/.env
 
 - **1.0.0 (1991)** — Eigenfaces recognition, with manual face boxes. ✅
 - **1.1.0 (1991)** — Suggested face boxes with the paper's distance-from-face-space map. ✅
-- **2.0.0 (1992)** — The next year's milestone.
+- **2.0.0 (1992)** — Total variation denoising (Rudin, Osher & Fatemi). ✅
+- **3.0.0 (1993)** — The next year's milestone.
 
 See `CHANGELOG.md` for version history.
 

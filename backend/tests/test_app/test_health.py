@@ -18,4 +18,4 @@ def test_health_returns_ok() -> None:
     body = response.json()
     assert body["status"] == "ok"
     assert body["app"] == "Eidos"
-    assert body["version"] == "1.1.0"
+    assert body["version"] == "2.0.0"
