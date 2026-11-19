@@ -53,7 +53,10 @@ def face_map_png(epsilon: np.ndarray, face_shape: tuple[int, int], size: tuple[i
     where no whole box fits, gets the largest (brightest) value.
     """
     rows, cols = face_shape
-    canvas = np.full((epsilon.shape[0] + rows - 1, epsilon.shape[1] + cols - 1), epsilon.max())
+    finite = np.isfinite(epsilon)
+    brightest = epsilon[finite].max() if finite.any() else 0.0
+    epsilon = np.where(finite, epsilon, brightest)  # flat boxes (ε = ∞) show as least face-like
+    canvas = np.full((epsilon.shape[0] + rows - 1, epsilon.shape[1] + cols - 1), brightest)
     canvas[rows // 2 : rows // 2 + epsilon.shape[0], cols // 2 : cols // 2 + epsilon.shape[1]] = (
         epsilon
     )

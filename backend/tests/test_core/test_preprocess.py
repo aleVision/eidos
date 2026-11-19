@@ -65,3 +65,15 @@ def test_prepare_returns_flat_vector() -> None:
     plain = prepare(image, (20, 30, 100, 120), use_window=False)
     assert plain.min() >= 0 and plain.max() <= 255
     assert np.all(vector <= plain + 1e-9)
+
+
+def test_prepare_standardize_gives_zero_mean_unit_std_before_window() -> None:
+    image = np.random.default_rng(2).integers(0, 256, (240, 180)).astype(np.uint8)
+    plain = prepare(image, (20, 30, 100, 120), use_window=False, standardize_face=True)
+    assert abs(plain.mean()) < 1e-9
+    assert plain.std() == pytest.approx(1.0)
+
+
+def test_prepare_standardize_rejects_flat_face() -> None:
+    with pytest.raises(ValueError, match="no contrast"):
+        prepare(np.full((200, 200), 50, dtype=np.uint8), (0, 0, 100, 120), standardize_face=True)

@@ -102,7 +102,8 @@ class DetectorStatus(BaseModel):
 
 
 class DetectorOut(BaseModel):
-    threshold: float
+    threshold: float  # normalized method
+    paper_threshold: float  # the paper's raw ε
     n_components: int
 
 

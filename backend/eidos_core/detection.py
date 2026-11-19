@@ -18,6 +18,17 @@ Gaussian background window (all ones when disabled) and ⋆ correlation:
 
 That is M' + 2 correlations per map (the paper's "L + 1", plus one for g).
 
+Not in the 1991 paper: with `normalize=True`, each box is first standardized
+(zero mean, unit standard deviation), as later detectors do. Measured on ORL, the
+paper's raw ε rates flat walls and smooth gradients as more face-like than real
+faces; standardizing removes brightness and contrast, so only the pattern counts.
+With μ and σ the box's mean and standard deviation (also correlations):
+
+    ω_i  = (I ⋆ (g·u_i) − μ·Σ(g·u_i)) / σ − u_iᵀΨ
+    ‖Φ‖² = (I² ⋆ g² − 2μ·(I ⋆ g²) + μ²·Σg²) / σ² − 2·(I ⋆ (g·Ψ) − μ·Σ(g·Ψ)) / σ + ‖Ψ‖²
+
+Flat boxes (σ ≈ 0) cannot be standardized and get ε = ∞.
+
 The map only finds faces of the model's size (112 x 92). `detect` therefore
 searches several sizes: it resizes the photo so each candidate face size becomes
 112 x 92, computes a map for each, and keeps the best position overall. This is
@@ -30,7 +41,7 @@ import cv2
 import numpy as np
 
 from eidos_core.eigenfaces import EigenfaceModel
-from eidos_core.preprocess import FaceBox, gaussian_window, to_grey
+from eidos_core.preprocess import MIN_CONTRAST, FaceBox, gaussian_window, to_grey
 
 # Search a copy whose longer side is at most this many pixels: faces are found
 # almost as well and the search is much faster on phone photos.
@@ -45,32 +56,61 @@ def _correlate(image: np.ndarray, kernel: np.ndarray) -> np.ndarray:
     return np.asarray(result, dtype=np.float64)
 
 
-def face_map(model: EigenfaceModel, image: np.ndarray, use_window: bool = True) -> np.ndarray:
+def face_map(
+    model: EigenfaceModel, image: np.ndarray, use_window: bool = True, normalize: bool = False
+) -> np.ndarray:
     """ε, the distance from face space, for every top-left position of a model-sized box.
 
     `image` is a grey image (any float or int type). The result has shape
-    (H - rows + 1, W - cols + 1) with (rows, cols) = model.image_shape.
+    (H - rows + 1, W - cols + 1) with (rows, cols) = model.image_shape. With
+    `normalize=True` every box is standardized first (not in the paper).
     """
     rows, cols = model.image_shape
     if image.shape[0] < rows or image.shape[1] < cols:
         raise ValueError("Image is too small to search for a face")
 
     g = gaussian_window((rows, cols)) if use_window else np.ones((rows, cols))
-    pixels = image.astype(np.float32)
     mean = model.mean.reshape(rows, cols)
+    pixels = image.astype(np.float64)
 
-    phi_energy = (
-        _correlate(pixels * pixels, g * g)  # ‖g·Γ‖²
-        - 2 * _correlate(pixels, g * mean)  # −2 (g·Γ)ᵀΨ
-        + float(model.mean @ model.mean)  # ‖Ψ‖²
-    )
+    if not normalize:  # the paper (Eqs. 10-15)
+        img = pixels.astype(np.float32)
+        phi_energy = (
+            _correlate(img * img, g * g)  # ‖g·Γ‖²
+            - 2 * _correlate(img, g * mean)  # −2 (g·Γ)ᵀΨ
+            + float(model.mean @ model.mean)  # ‖Ψ‖²
+        )
+        explained = np.zeros_like(phi_energy)
+        for u in model.eigenfaces.T:
+            weight = _correlate(img, g * u.reshape(rows, cols)) - float(u @ model.mean)  # ω_i
+            explained += weight * weight
+        paper_distances: np.ndarray = np.sqrt(np.maximum(phi_energy - explained, 0.0))
+        return paper_distances
+
+    # Standardized boxes. Subtracting the image mean first keeps float32 precise
+    # and changes nothing, because standardizing removes any constant offset.
+    img = (pixels - pixels.mean()).astype(np.float32)
+    n = rows * cols
+    box_mean = _correlate(img, np.ones((rows, cols))) / n  # μ
+    variance = _correlate(img * img, np.ones((rows, cols))) / n - box_mean**2
+    flat = variance < MIN_CONTRAST**2
+    sigma = np.sqrt(np.where(flat, 1.0, variance))
+
+    g2 = g * g
+    energy = (
+        _correlate(img * img, g2) - 2 * box_mean * _correlate(img, g2) + box_mean**2 * g2.sum()
+    ) / sigma**2  # ‖g·Γ'‖²
+    cross = (_correlate(img, g * mean) - box_mean * float((g * mean).sum())) / sigma  # (g·Γ')ᵀΨ
+    phi_energy = energy - 2 * cross + float(model.mean @ model.mean)
     explained = np.zeros_like(phi_energy)
     for u in model.eigenfaces.T:
-        weight = _correlate(pixels, g * u.reshape(rows, cols)) - float(u @ model.mean)  # ω_i
+        kernel = g * u.reshape(rows, cols)
+        weight = (_correlate(img, kernel) - box_mean * float(kernel.sum())) / sigma
+        weight -= float(u @ model.mean)  # ω_i
         explained += weight * weight
 
-    epsilon_squared = np.maximum(phi_energy - explained, 0.0)  # rounding can dip below 0
-    distances: np.ndarray = np.sqrt(epsilon_squared)
+    distances: np.ndarray = np.sqrt(np.maximum(phi_energy - explained, 0.0))
+    distances[flat] = np.inf
     return distances
 
 
@@ -83,7 +123,11 @@ class Detection:
 
 
 def detect(
-    model: EigenfaceModel, image: np.ndarray, use_window: bool = True, n_scales: int = 8
+    model: EigenfaceModel,
+    image: np.ndarray,
+    use_window: bool = True,
+    n_scales: int = 8,
+    normalize: bool = False,
 ) -> Detection:
     """The most face-like box in `image` (grey or RGB), searched over `n_scales` sizes.
 
@@ -106,7 +150,8 @@ def detect(
         factor = rows / face_h  # resize so this face size becomes the model's size
         size = (max(cols, round(width * factor)), max(rows, round(height * factor)))
         interpolation = cv2.INTER_AREA if factor < 1 else cv2.INTER_LINEAR
-        epsilon = face_map(model, cv2.resize(grey, size, interpolation=interpolation), use_window)
+        resized = cv2.resize(grey, size, interpolation=interpolation)
+        epsilon = face_map(model, resized, use_window, normalize)
         row, col = np.unravel_index(np.argmin(epsilon), epsilon.shape)
         if best is None or epsilon[row, col] < best[0]:
             best = (float(epsilon[row, col]), int(row), int(col), factor, epsilon)
@@ -114,6 +159,8 @@ def detect(
         raise ValueError("Image is too small to search for a face")
 
     distance, r, c, factor, epsilon = best
+    if not np.isfinite(distance):
+        raise ValueError("No face-like region found")
     scale = factor * shrink  # original image -> searched image
     original_h, original_w = image.shape[:2]
     w = min(round(cols / scale), original_w)

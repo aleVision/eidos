@@ -32,9 +32,11 @@ def detect_calls(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     calls: list[dict[str, Any]] = []
     real_detect = detection_router.detect
 
-    def spy(model: Any, image: np.ndarray, use_window: bool = True) -> Any:
-        calls.append({"shape": image.shape, "use_window": use_window})
-        return real_detect(model, image, use_window=use_window)
+    def spy(model: Any, image: np.ndarray, use_window: bool = True, normalize: bool = False) -> Any:
+        calls.append(
+            {"shape": image.shape, "use_window": use_window, "normalize": normalize, "model": model}
+        )
+        return real_detect(model, image, use_window=use_window, normalize=normalize)
 
     monkeypatch.setattr(detection_router, "detect", spy)
     return calls
@@ -110,7 +112,10 @@ def test_detector_keeps_its_window_flag(
 
 def test_people_model_training_does_not_touch_detector(orl_client: TestClient) -> None:
     orl_client.post("/detector")
-    files = [settings.models_dir / "detector.npz", settings.models_dir / "detector.json"]
+    files = [
+        settings.models_dir / name
+        for name in ("detector.npz", "detector-paper.npz", "detector.json")
+    ]
     before = [f.stat().st_mtime_ns for f in files]
 
     enroll(orl_client, n_people=2, n_samples=3)
@@ -143,3 +148,38 @@ def test_detector_download_failure_502(
     assert response.status_code == 502
     assert response.json()["detail"].startswith("Could not download the ORL dataset")
     assert client.get("/detector").json() == {"available": False}
+
+
+def test_detect_default_method_is_normalized(
+    orl_client: TestClient, detect_calls: list[dict[str, Any]]
+) -> None:
+    orl_client.post("/detector")
+    assert _detect(orl_client, _photo()).status_code == 200
+    assert detect_calls[-1]["normalize"] is True
+
+
+def test_detect_paper_method_uses_raw_face_space(
+    orl_client: TestClient, detect_calls: list[dict[str, Any]]
+) -> None:
+    orl_client.post("/detector")
+    files = {"image": ("p.png", _photo(), "image/png")}
+    normalized = orl_client.post("/detect", files=files, data={"method": "normalized"})
+    paper = orl_client.post("/detect", files=files, data={"method": "paper"})
+    assert normalized.status_code == paper.status_code == 200
+    assert detect_calls[-1]["normalize"] is False
+    # two different face spaces: the raw one was trained on unstandardized faces
+    assert not np.allclose(detect_calls[-1]["model"].mean, detect_calls[-2]["model"].mean)
+
+
+def test_detect_unknown_method_422(orl_client: TestClient) -> None:
+    orl_client.post("/detector")
+    files = {"image": ("p.png", _photo(), "image/png")}
+    assert orl_client.post("/detect", files=files, data={"method": "magic"}).status_code == 422
+
+
+def test_detect_blank_image_422(orl_client: TestClient) -> None:
+    orl_client.post("/detector")
+    blank = png_bytes(np.full((300, 300, 3), 77))
+    response = _detect(orl_client, blank)
+    assert response.status_code == 422
+    assert response.json()["detail"] == "No face-like region found"

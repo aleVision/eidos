@@ -1,6 +1,8 @@
 """Face detection with the face map (Turk & Pentland 1991): suggest a face box."""
 
-from fastapi import APIRouter, HTTPException, Response, UploadFile, status
+from typing import Annotated, Literal
+
+from fastapi import APIRouter, Form, HTTPException, Response, UploadFile, status
 
 from app.imaging import face_map_png, png_data_url, read_image
 from app.routers.demo import OrlRoot, download_orl
@@ -29,19 +31,32 @@ def set_up_detector(root: OrlRoot, response: Response) -> DetectorOut:
     except NoDetectorError:
         download_orl(root)
         info = train_detector(root)
-    return DetectorOut(threshold=info.threshold, n_components=info.n_components)
+    return DetectorOut(
+        threshold=info.threshold,
+        paper_threshold=info.paper_threshold,
+        n_components=info.n_components,
+    )
 
 
 @router.post("/detect", response_model=DetectionOut)
-def detect_face(image: UploadFile) -> DetectionOut:
+def detect_face(
+    image: UploadFile,
+    method: Annotated[Literal["normalized", "paper"], Form()] = "normalized",
+) -> DetectionOut:
+    """Suggest the most face-like box.
+
+    method "normalized" (default) standardizes each box first, which is not in the
+    1991 paper; "paper" uses the paper's raw ε, for comparison.
+    """
+    normalized = method == "normalized"
     try:
-        model, info = load_detector()
+        model, info = load_detector(normalized)
     except NoDetectorError as error:
         raise HTTPException(status.HTTP_409_CONFLICT, "Face detection is not set up yet") from error
     try:
         pixels = read_image(image.file.read())
         # Use the window the detector was trained with, not today's setting.
-        found = detect(model, pixels, use_window=info.use_window)
+        found = detect(model, pixels, use_window=info.use_window, normalize=normalized)
     except ValueError as error:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(error)) from error
 
@@ -51,6 +66,6 @@ def detect_face(image: UploadFile) -> DetectionOut:
     return DetectionOut(
         box=Box(x=x, y=y, w=w, h=h),
         distance=found.distance,
-        confident=found.distance <= info.threshold,
+        confident=found.distance <= (info.threshold if normalized else info.paper_threshold),
         map_png=png_data_url(face_map),
     )

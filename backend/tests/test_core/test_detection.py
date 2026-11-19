@@ -22,15 +22,19 @@ def small_model(use_window: bool) -> tuple[EigenfaceModel, np.ndarray]:
     return train(faces, labels, n_components=6, image_shape=SMALL), np.array(raw)
 
 
-def reference_map(model: EigenfaceModel, image: np.ndarray, use_window: bool) -> np.ndarray:
+def reference_map(
+    model: EigenfaceModel, image: np.ndarray, use_window: bool, normalize: bool = False
+) -> np.ndarray:
     """The obvious, slow way: crop every position and measure ε (Eq. 9) directly."""
     rows, cols = model.image_shape
     window = gaussian_window((rows, cols)) if use_window else np.ones((rows, cols))
     out = np.empty((image.shape[0] - rows + 1, image.shape[1] - cols + 1))
     for r in range(out.shape[0]):
         for c in range(out.shape[1]):
-            patch = image[r : r + rows, c : c + cols] * window
-            out[r, c] = distance_from_face_space(model, patch.ravel())
+            patch = image[r : r + rows, c : c + cols].astype(np.float64)
+            if normalize:
+                patch = (patch - patch.mean()) / patch.std()
+            out[r, c] = distance_from_face_space(model, (patch * window).ravel())
     return out
 
 
@@ -63,7 +67,7 @@ def test_face_map_is_lowest_where_a_training_face_is_pasted() -> None:
     assert np.unravel_index(np.argmin(epsilon), epsilon.shape) == (9, 7)
 
 
-def full_size_model() -> tuple[EigenfaceModel, np.ndarray]:
+def full_size_model(standardize: bool = False) -> tuple[EigenfaceModel, np.ndarray]:
     """A model at the real 112 x 92 face size, trained on windowed synthetic faces.
 
     The synthetic faces are smooth (random 14 x 12 patterns upsampled), like real
@@ -79,6 +83,8 @@ def full_size_model() -> tuple[EigenfaceModel, np.ndarray]:
     )
     window = gaussian_window()
     raw = [p + rng.normal(0, 5, FACE_SHAPE) for p in prototypes for _ in range(5)]
+    if standardize:
+        raw = [(f - f.mean()) / f.std() for f in raw]
     faces = np.array([(f * window).ravel() for f in raw])
     return train(faces, [i // 5 for i in range(20)], n_components=10), prototypes
 
@@ -119,3 +125,46 @@ def test_detect_accepts_rgb() -> None:
     grey[30:142, 40:132] = prototypes[1]
     rgb = np.repeat(grey[..., None], 3, axis=2).astype(np.uint8)
     assert detect(model, rgb).box == detect(model, grey.astype(np.uint8)).box
+
+
+def test_normalized_face_map_matches_reference() -> None:
+    model, _ = small_model(True)
+    image = np.random.default_rng(3).uniform(0, 255, (30, 26))
+    expected = reference_map(model, image, use_window=True, normalize=True)
+    np.testing.assert_allclose(
+        face_map(model, image, normalize=True), expected, rtol=1e-3, atol=1e-3 * expected.max()
+    )
+
+
+def test_normalized_face_map_ignores_brightness_and_contrast() -> None:
+    model, _ = small_model(True)
+    image = np.random.default_rng(3).uniform(50, 150, (30, 26))
+    np.testing.assert_allclose(
+        face_map(model, image * 0.5 + 40, normalize=True),
+        face_map(model, image, normalize=True),
+        rtol=1e-3,
+    )
+
+
+def test_normalized_face_map_flat_region_is_infinite() -> None:
+    model, _ = small_model(True)
+    image = np.random.default_rng(3).uniform(0, 255, (30, 26))
+    image[:14, :12] = 90.0  # exactly one flat box at the top-left corner
+    epsilon = face_map(model, image, normalize=True)
+    assert np.isinf(epsilon[0, 0])
+    assert np.isfinite(epsilon[5:, 5:]).all()
+
+
+def test_normalized_detect_prefers_face_over_smooth_background() -> None:
+    model, prototypes = full_size_model(standardize=True)
+    background = np.tile(np.linspace(60, 200, 400), (300, 1))  # a smooth lighting gradient
+    image = background.copy()
+    image[60 : 60 + 112, 150 : 150 + 92] = prototypes[1]
+    x, y, w, h = detect(model, image, normalize=True).box
+    assert abs(x - 150) <= 17 and abs(y - 60) <= 17 and abs(h - 112) <= 17
+
+
+def test_normalized_detect_on_blank_image_raises() -> None:
+    model, _ = full_size_model(standardize=True)
+    with pytest.raises(ValueError, match="No face-like region found"):
+        detect(model, np.full((200, 200), 77.0), normalize=True)

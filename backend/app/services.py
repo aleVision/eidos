@@ -29,7 +29,8 @@ class NoDetectorError(Exception):
 
 @dataclass(frozen=True)
 class DetectorInfo:
-    threshold: float  # θ on ε for a "confident" detection
+    threshold: float  # θ on ε for a "confident" detection, normalized method
+    paper_threshold: float  # the same for the paper's raw ε
     n_components: int
     use_window: bool  # the window setting the detector was trained with
 
@@ -42,8 +43,10 @@ DETECTOR_COMPONENTS = 20
 DETECTOR_MARGIN = 1.5
 
 
-def _detector_paths() -> tuple[Path, Path]:
-    return settings.models_dir / "detector.npz", settings.models_dir / "detector.json"
+def _detector_paths() -> tuple[Path, Path, Path]:
+    """(normalized face space, the paper's raw face space, settings)."""
+    folder = settings.models_dir
+    return folder / "detector.npz", folder / "detector-paper.npz", folder / "detector.json"
 
 
 def sample_vector(sample: FaceSample) -> np.ndarray:
@@ -112,14 +115,15 @@ def is_stale(db: Session, run: ModelRun) -> bool:
     return changed_counts or (newest is not None and newest > run.created_at)
 
 
-def train_detector(orl_root: Path) -> DetectorInfo:
-    """Learn the detector's face space from ORL and store it next to the models."""
-    use_window = settings.gaussian_window
+def _train_face_space(
+    orl_root: Path, use_window: bool, standardize_face: bool
+) -> tuple[EigenfaceModel, float]:
+    """One detector face space from ORL, and its threshold on held-out ε."""
 
     def vector(subject: int, index: int) -> np.ndarray:
         pixels = load_orl_image(orl_root, subject, index)
         rows, cols = pixels.shape
-        return prepare(pixels, (0, 0, cols, rows), use_window)
+        return prepare(pixels, (0, 0, cols, rows), use_window, standardize_face)
 
     faces = np.array([vector(s, i) for s in DETECTOR_SUBJECTS for i in DETECTOR_TRAIN_PHOTOS])
     labels = [s for s in DETECTOR_SUBJECTS for _ in DETECTOR_TRAIN_PHOTOS]
@@ -129,20 +133,36 @@ def train_detector(orl_root: Path) -> DetectorInfo:
         for s in DETECTOR_SUBJECTS
         for i in DETECTOR_HELD_OUT_PHOTOS
     ]
+    return model, DETECTOR_MARGIN * float(np.percentile(held_out, 95))
+
+
+def train_detector(orl_root: Path) -> DetectorInfo:
+    """Learn both detector face spaces from ORL and store them next to the models.
+
+    "normalized" standardizes every face first (not in the 1991 paper); "paper"
+    keeps the raw pixels, for comparison.
+    """
+    use_window = settings.gaussian_window
+    normalized, threshold = _train_face_space(orl_root, use_window, standardize_face=True)
+    paper, paper_threshold = _train_face_space(orl_root, use_window, standardize_face=False)
     info = DetectorInfo(
-        threshold=DETECTOR_MARGIN * float(np.percentile(held_out, 95)),
-        n_components=model.eigenfaces.shape[1],
+        threshold=threshold,
+        paper_threshold=paper_threshold,
+        n_components=normalized.eigenfaces.shape[1],
         use_window=use_window,
     )
-    model_path, info_path = _detector_paths()
+    normalized_path, paper_path, info_path = _detector_paths()
     settings.models_dir.mkdir(parents=True, exist_ok=True)
-    save_model(model, model_path)
+    save_model(normalized, normalized_path)
+    save_model(paper, paper_path)
     info_path.write_text(json.dumps(asdict(info)))
     return info
 
 
-def load_detector() -> tuple[EigenfaceModel, DetectorInfo]:
-    model_path, info_path = _detector_paths()
-    if not (model_path.exists() and info_path.exists()):
+def load_detector(normalized: bool = True) -> tuple[EigenfaceModel, DetectorInfo]:
+    """The detector face space for one method, with the detector's settings."""
+    normalized_path, paper_path, info_path = _detector_paths()
+    if not all(p.exists() for p in (normalized_path, paper_path, info_path)):
         raise NoDetectorError
-    return load_model(model_path), DetectorInfo(**json.loads(info_path.read_text()))
+    model = load_model(normalized_path if normalized else paper_path)
+    return model, DetectorInfo(**json.loads(info_path.read_text()))
