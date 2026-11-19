@@ -168,3 +168,12 @@ def test_normalized_detect_on_blank_image_raises() -> None:
     model, _ = full_size_model(standardize=True)
     with pytest.raises(ValueError, match="No face-like region found"):
         detect(model, np.full((200, 200), 77.0), normalize=True)
+
+
+def test_detect_searches_portrait_sized_faces_only() -> None:
+    """Small boxes look face-like by default (resizing smooths them), so the search
+    starts at faces 35% of the image's shorter side: Eidos works on portraits."""
+    model, _ = full_size_model()
+    image = np.random.default_rng(7).uniform(0, 255, (300, 400))
+    assert detect(model, image).box[3] >= round(0.35 * 300)
+    assert detect(model, image, min_face_fraction=0.2).box[3] >= round(0.2 * 300)

@@ -128,11 +128,15 @@ def detect(
     use_window: bool = True,
     n_scales: int = 8,
     normalize: bool = False,
+    min_face_fraction: float = 0.35,
 ) -> Detection:
     """The most face-like box in `image` (grey or RGB), searched over `n_scales` sizes.
 
-    Box heights run geometrically from 20% to 100% of the image's shorter side,
-    and keep the model's aspect ratio.
+    Box heights run geometrically from `min_face_fraction` to 100% of the image's
+    shorter side, and keep the model's aspect ratio. The default searches portraits
+    only: measured on ORL faces, ε is not comparable across sizes (resizing smooths
+    small boxes, which then look more face-like), so letting small boxes compete
+    with large ones makes the background win.
     """
     rows, cols = model.image_shape
     grey = to_grey(image)
@@ -143,7 +147,7 @@ def detect(
     height, width = grey.shape
 
     best: tuple[float, int, int, float, np.ndarray] | None = None
-    for face_h in np.geomspace(0.2, 1.0, n_scales) * min(height, width):
+    for face_h in np.geomspace(min_face_fraction, 1.0, n_scales) * min(height, width):
         face_w = face_h * cols / rows
         if face_h < _MIN_FACE or face_h > height or face_w > width:
             continue

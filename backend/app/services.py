@@ -40,7 +40,9 @@ DETECTOR_SUBJECTS = range(1, 41)
 DETECTOR_TRAIN_PHOTOS = range(1, 9)  # photos 9-10 measure held-out ε for the threshold
 DETECTOR_HELD_OUT_PHOTOS = range(9, 11)
 DETECTOR_COMPONENTS = 20
-DETECTOR_MARGIN = 1.5
+# "confident" = at least as face-like as 95% of real held-out faces (no extra margin):
+# measured, wrong picks can be as face-like as faces, so a looser threshold says nothing.
+DETECTOR_MARGIN = 1.0
 
 
 def _detector_paths() -> tuple[Path, Path, Path]:
