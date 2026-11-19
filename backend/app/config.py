@@ -13,6 +13,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BACKEND_DIR / "data"
 
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="EIDOS_", env_file=".env")
 
