@@ -5,9 +5,10 @@ storage; schemas describe the API contract. Keeping them apart means we can
 change one without forcing a change in the other.
 """
 
+from datetime import datetime
 from typing import Annotated
 
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel, PositiveFloat, PositiveInt, StringConstraints
 
 
 class HealthResponse(BaseModel):
@@ -38,3 +39,24 @@ class SampleOut(BaseModel):
     id: int
     person_id: int
     box: Box
+
+
+class TrainRequest(BaseModel):
+    n_components: PositiveInt | None = None
+
+
+class ThresholdsIn(BaseModel):
+    person: PositiveFloat
+    face_space: PositiveFloat
+
+
+class ModelOut(BaseModel):
+    id: int
+    created_at: datetime
+    n_people: int
+    n_samples: int
+    n_components: int
+    theta_person: float
+    theta_face: float
+    explained_variance: list[float]
+    stale: bool

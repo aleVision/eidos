@@ -16,3 +16,10 @@ def random_png(seed: int, size: tuple[int, int] = (150, 200)) -> bytes:
     """A random RGB image of size (rows, cols)."""
     rng = np.random.default_rng(seed)
     return png_bytes(rng.integers(0, 256, (*size, 3)))
+
+
+def face_like_png(person: int, sample: int, size: tuple[int, int] = (150, 200)) -> bytes:
+    """A fixed per-person pattern plus a little per-sample noise, so people are separable."""
+    prototype = np.random.default_rng(1000 + person).integers(0, 256, (*size, 3))
+    noise = np.random.default_rng(person * 100 + sample).normal(0, 6, prototype.shape)
+    return png_bytes(np.clip(prototype + noise, 0, 255))

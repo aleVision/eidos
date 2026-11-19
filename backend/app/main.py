@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import models  # noqa: F401
 from app.config import DATA_DIR, settings
 from app.database import Base, engine
-from app.routers import health, people
+from app.routers import health, model, people
 
 
 @asynccontextmanager
@@ -50,3 +50,4 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(people.router)
+app.include_router(model.router)
