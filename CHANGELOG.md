@@ -45,7 +45,7 @@ Recognition", *Journal of Cognitive Neuroscience* 3(1):71–86, 1991).
   **How it works** (mean face, eigenfaces, variance curve, reconstruction
   slider) and **Recognize** (outcome, both distances, four-quadrant plot with
   draggable thresholds).
-- Tests: 59 unit and API tests, plus an opt-in ORL replication test
+- Tests: 70 unit and API tests, plus an opt-in ORL replication test
   (`pytest -m dataset`, 86.7% accuracy at M′ = 20).
 
 ### Security
