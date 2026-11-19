@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="EIDOS_", env_file=".env")
 
     app_name: str = "Eidos"
-    app_version: str = "1.0.0"
+    app_version: str = "1.1.0"
 
     # SQLite lives in backend/data/. The directory is created on startup
     database_url: str = f"sqlite:///{DATA_DIR / 'eidos.db'}"
