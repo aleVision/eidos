@@ -40,7 +40,10 @@ export default function ModelView() {
   const settledK = useDebounced(k, 150);
 
   useEffect(() => {
-    getModel().then(setModel, () => setModel(null)); // 404 simply means "not trained yet"
+    getModel().then((loaded) => {
+      setModel(loaded);
+      setK((current) => Math.min(current, loaded.n_components)); // small models have few eigenfaces
+    }, () => setModel(null)); // 404 simply means "not trained yet"
     listPeople().then((list) => setPeople(list.filter((p) => p.n_samples > 0)), () => undefined);
   }, []);
 

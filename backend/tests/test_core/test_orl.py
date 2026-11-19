@@ -58,3 +58,12 @@ def test_orl_replication_accuracy(tmp_path_factory: pytest.TempPathFactory) -> N
     accuracy = correct / len(test_y)
     print(f"ORL accuracy at M'=20: {accuracy:.3f}")
     assert accuracy >= 0.85
+
+
+def test_ensure_orl_rejects_archive_without_orl_photos(tmp_path: Path) -> None:
+    archive = tmp_path / "other.zip"
+    with zipfile.ZipFile(archive, "w") as z:
+        z.writestr("README", "not the ORL database")
+    with pytest.raises(ValueError, match="no ORL photos"):
+        ensure_orl(tmp_path / "orl", url=archive.as_uri())
+    assert not (tmp_path / "orl").exists()

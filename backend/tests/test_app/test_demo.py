@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.main import app
 from app.routers.demo import get_orl_root
 from tests.orl_fake import write_fake_orl
@@ -42,3 +43,19 @@ def test_demo_test_photos_lists_held_out_and_strangers(demo_client: TestClient) 
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
     assert demo_client.get("/demo/orl/photos/99/1.png").status_code == 404
+
+
+@pytest.mark.parametrize("problem", ["missing", "not_a_zip"])
+def test_demo_download_failure_is_a_clear_502(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, problem: str
+) -> None:
+    source = tmp_path / "att_faces.zip"
+    if problem == "not_a_zip":
+        source.write_bytes(b"this is not a zip file")
+    monkeypatch.setattr(settings, "orl_url", source.as_uri())
+    app.dependency_overrides[get_orl_root] = lambda: tmp_path / "orl"
+
+    response = client.post("/demo/orl")
+    assert response.status_code == 502
+    assert response.json()["detail"].startswith("Could not download the ORL dataset")
+    assert client.get("/people").json() == []

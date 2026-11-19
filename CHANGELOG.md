@@ -48,6 +48,10 @@ Recognition", *Journal of Cognitive Neuroscience* 3(1):71–86, 1991).
 - Tests: 59 unit and API tests, plus an opt-in ORL replication test
   (`pytest -m dataset`, 86.7% accuracy at M′ = 20).
 
+### Security
+- The API refuses data-changing requests sent by other websites (checked with the
+  browser's Origin header), so a page you visit cannot write into a local Eidos.
+
 ### Changed
 - Backend requires Python 3.12.
 

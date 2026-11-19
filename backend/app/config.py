@@ -9,6 +9,8 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from eidos_core.datasets.orl import ORL_URL
+
 # The backend/ directory, regardless of where the app is launched from
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BACKEND_DIR / "data"
@@ -34,6 +36,7 @@ class Settings(BaseSettings):
     # Recognition defaults (see eidos_core). The Gaussian window fades the
     # background around the face, as suggested by Turk & Pentland (1991).
     gaussian_window: bool = True
+    orl_url: str = ORL_URL
     default_components: int = 20
 
 

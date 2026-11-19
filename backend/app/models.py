@@ -23,6 +23,8 @@ def _utcnow() -> datetime:
 
 class Person(Base):
     __tablename__ = "people"
+    # Never reuse a deleted person's id: trained models refer to people by id.
+    __table_args__ = {"sqlite_autoincrement": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -38,6 +40,7 @@ class Person(Base):
 
 class FaceSample(Base):
     __tablename__ = "face_samples"
+    __table_args__ = {"sqlite_autoincrement": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     person_id: Mapped[int] = mapped_column(

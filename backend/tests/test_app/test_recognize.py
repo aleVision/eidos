@@ -75,3 +75,15 @@ def test_reconstruct_before_training_409(client: TestClient) -> None:
     people = enroll(client, n_people=1, n_samples=1)
     sample_id = client.get(f"/people/{people[0]}/samples").json()[0]["id"]
     assert client.get(f"/model/reconstruct/{sample_id}", params={"k": 1}).status_code == 409
+
+
+def test_new_person_does_not_inherit_a_deleted_persons_id(client: TestClient) -> None:
+    """SQLite reuses the highest freed rowid unless AUTOINCREMENT is set: a person
+    created after a delete must not be named for the deleted person's face."""
+    people = enroll(client, n_people=3, n_samples=4)
+    client.post("/model/train", json={"n_components": 3})
+    client.delete(f"/people/{people[2]}")
+    newcomer = client.post("/people", json={"name": "Newcomer"}).json()["id"]
+    assert newcomer != people[2]
+    result = _recognize(client, face_like_png(3, 99))
+    assert result["nearest"]["name"] == "(deleted person)"

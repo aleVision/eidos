@@ -3,6 +3,7 @@
 Credit: Olivetti Research Laboratory (AT&T Laboratories Cambridge).
 """
 
+import zipfile
 from pathlib import Path
 from typing import Annotated
 
@@ -42,7 +43,12 @@ def _demo_people(db: Session) -> list[Person]:
 def load_demo(db: DbSession, root: OrlRoot) -> DemoLoaded:
     if _demo_people(db):
         return DemoLoaded(people_added=0)
-    ensure_orl(root)
+    try:
+        ensure_orl(root, settings.orl_url)
+    except (OSError, zipfile.BadZipFile, ValueError) as error:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, f"Could not download the ORL dataset: {error}"
+        ) from error
     settings.images_dir.mkdir(parents=True, exist_ok=True)
     for subject in ENROLLED_SUBJECTS:
         person = Person(name=f"ORL s{subject}", is_demo=True)

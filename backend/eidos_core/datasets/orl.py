@@ -21,22 +21,32 @@ ORL_CREDIT = "Olivetti Research Laboratory (AT&T Laboratories Cambridge)"
 
 # Only extract files shaped like s<subject>/<index>.pgm (also blocks path traversal).
 _MEMBER = re.compile(r"^s(\d+)/(\d+)\.pgm$")
+_DOWNLOAD_TIMEOUT_S = 60
 
 
 def ensure_orl(dest: Path, url: str = ORL_URL) -> Path:
-    """Download and extract ORL into `dest` once; return `dest` (containing s1..s40)."""
+    """Download and extract ORL into `dest` once; return `dest` (containing s1..s40).
+
+    Raises OSError if the download fails (offline, timeout, TLS), zipfile.BadZipFile
+    if the file is not a zip, and ValueError if the zip holds no ORL photos.
+    """
     if (dest / "s1" / "1.pgm").exists():
         return dest
     dest.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=dest.parent) as tmp:
         archive = Path(tmp) / "orl.zip"
-        with urllib.request.urlopen(url) as response, archive.open("wb") as file:
+        with (
+            urllib.request.urlopen(url, timeout=_DOWNLOAD_TIMEOUT_S) as response,
+            archive.open("wb") as file,
+        ):
             shutil.copyfileobj(response, file)
         staging = Path(tmp) / "extracted"
         with zipfile.ZipFile(archive) as z:
             for member in z.namelist():
                 if _MEMBER.match(member):
                     z.extract(member, staging)
+        if not staging.exists():
+            raise ValueError("The archive contains no ORL photos")
         shutil.rmtree(dest, ignore_errors=True)
         staging.rename(dest)
     return dest
