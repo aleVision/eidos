@@ -9,8 +9,11 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    proxy: {
-      "/health": "http://127.0.0.1:8000",
-    },
+    proxy: Object.fromEntries(
+      ["/health", "/people", "/samples", "/model", "/recognize", "/demo"].map((path) => [
+        path,
+        "http://127.0.0.1:8000",
+      ])
+    ),
   },
 });

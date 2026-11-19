@@ -51,7 +51,7 @@ def delete_sample_file(sample: FaceSample) -> None:
 
 @router.get("/people", response_model=list[PersonOut])
 def list_people(db: DbSession) -> list[PersonOut]:
-    people = db.scalars(select(Person).order_by(Person.is_demo, Person.name)).all()
+    people = db.scalars(select(Person).order_by(Person.is_demo, Person.id)).all()
     return [_person_out(p) for p in people]
 
 
