@@ -17,13 +17,26 @@ Gaussian background window (all ones when disabled) and ⋆ correlation:
     ‖Φ‖² = I² ⋆ g² − 2·(I ⋆ (g·Ψ)) + ‖Ψ‖²
 
 That is M' + 2 correlations per map (the paper's "L + 1", plus one for g).
+
+The map only finds faces of the model's size (112 x 92). `detect` therefore
+searches several sizes: it resizes the photo so each candidate face size becomes
+112 x 92, computes a map for each, and keeps the best position overall. This is
+the multiscale search the paper suggests for unknown head size.
 """
+
+from dataclasses import dataclass
 
 import cv2
 import numpy as np
 
 from eidos_core.eigenfaces import EigenfaceModel
-from eidos_core.preprocess import gaussian_window
+from eidos_core.preprocess import FaceBox, gaussian_window, to_grey
+
+# Search a copy whose longer side is at most this many pixels: faces are found
+# almost as well and the search is much faster on phone photos.
+_SEARCH_SIDE = 640
+# Smallest face (box height) searched, in pixels of that copy.
+_MIN_FACE = 40
 
 
 def _correlate(image: np.ndarray, kernel: np.ndarray) -> np.ndarray:
@@ -59,3 +72,52 @@ def face_map(model: EigenfaceModel, image: np.ndarray, use_window: bool = True) 
     epsilon_squared = np.maximum(phi_energy - explained, 0.0)  # rounding can dip below 0
     distances: np.ndarray = np.sqrt(epsilon_squared)
     return distances
+
+
+@dataclass(frozen=True)
+class Detection:
+    box: FaceBox  # (x, y, w, h) in pixels of the original image, inside it
+    distance: float  # ε at the best position and size
+    face_map: np.ndarray  # the ε map of the best size, for display
+    scale: float  # resize factor from the original image to the best size's image
+
+
+def detect(
+    model: EigenfaceModel, image: np.ndarray, use_window: bool = True, n_scales: int = 8
+) -> Detection:
+    """The most face-like box in `image` (grey or RGB), searched over `n_scales` sizes.
+
+    Box heights run geometrically from 20% to 100% of the image's shorter side,
+    and keep the model's aspect ratio.
+    """
+    rows, cols = model.image_shape
+    grey = to_grey(image)
+    shrink = min(1.0, _SEARCH_SIDE / max(grey.shape))
+    if shrink < 1.0:
+        size = (round(grey.shape[1] * shrink), round(grey.shape[0] * shrink))
+        grey = cv2.resize(grey, size, interpolation=cv2.INTER_AREA)
+    height, width = grey.shape
+
+    best: tuple[float, int, int, float, np.ndarray] | None = None
+    for face_h in np.geomspace(0.2, 1.0, n_scales) * min(height, width):
+        face_w = face_h * cols / rows
+        if face_h < _MIN_FACE or face_h > height or face_w > width:
+            continue
+        factor = rows / face_h  # resize so this face size becomes the model's size
+        size = (max(cols, round(width * factor)), max(rows, round(height * factor)))
+        interpolation = cv2.INTER_AREA if factor < 1 else cv2.INTER_LINEAR
+        epsilon = face_map(model, cv2.resize(grey, size, interpolation=interpolation), use_window)
+        row, col = np.unravel_index(np.argmin(epsilon), epsilon.shape)
+        if best is None or epsilon[row, col] < best[0]:
+            best = (float(epsilon[row, col]), int(row), int(col), factor, epsilon)
+    if best is None:
+        raise ValueError("Image is too small to search for a face")
+
+    distance, r, c, factor, epsilon = best
+    scale = factor * shrink  # original image -> searched image
+    original_h, original_w = image.shape[:2]
+    w = min(round(cols / scale), original_w)
+    h = min(round(rows / scale), original_h)
+    x = min(max(0, round(c / scale)), original_w - w)
+    y = min(max(0, round(r / scale)), original_h - h)
+    return Detection(box=(x, y, w, h), distance=distance, face_map=epsilon, scale=scale)
