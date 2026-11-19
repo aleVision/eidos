@@ -26,6 +26,11 @@ import numpy as np
 # Chambolle's step size; τ ≤ 1/8 guarantees convergence on a 2-D grid.
 _TAU = 0.125
 
+# Supported strengths. Far outside this range the float32 solver overflows
+# (1/λ or τ·λ beyond ~3e38) and returns NaN; such λ make no practical sense anyway.
+LAM_MIN = 1e-6
+LAM_MAX = 1e9
+
 
 def gradient(u: np.ndarray) -> np.ndarray:
     """Forward differences, shape (2, H, W): [downward, rightward].
@@ -99,8 +104,8 @@ def denoise_tv(image: np.ndarray, lam: float, n_iter: int = 100) -> DenoiseResul
 
     Each colour channel is denoised independently, in float32 to save memory.
     """
-    if lam <= 0:
-        raise ValueError("Strength must be positive")
+    if not LAM_MIN <= lam <= LAM_MAX:  # also rejects NaN and infinity
+        raise ValueError(f"Strength must be between {LAM_MIN:g} and {LAM_MAX:g}")
     f = image.astype(np.float32)
     channels = [f] if f.ndim == 2 else [f[..., c] for c in range(f.shape[2])]
     total = np.zeros(n_iter)

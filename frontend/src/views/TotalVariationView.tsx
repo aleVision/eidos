@@ -41,10 +41,12 @@ export default function TotalVariationView() {
   }, [source]);
 
   // Preview: debounced, and only the newest request may update the screen.
+  // The sequence number moves on as soon as the photo or λ changes, so an answer
+  // still in flight for the old settings is ignored even before the new request.
   useEffect(() => {
+    const id = ++latest.current;
     if (!source) return;
     const timer = setTimeout(() => {
-      const id = ++latest.current;
       setBusy(true);
       denoisePreview(source, lam).then(
         (preview) => {

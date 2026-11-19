@@ -138,9 +138,10 @@ def test_colour_shape_and_range() -> None:
     assert result.image.min() >= 0.0 and result.image.max() <= 1.0
 
 
-@pytest.mark.parametrize("lam", [0.0, -1.0])
-def test_rejects_non_positive_strength(lam: float) -> None:
-    with pytest.raises(ValueError, match="Strength must be positive"):
+@pytest.mark.parametrize("lam", [0.0, -1.0, 1e-40, 1e300, float("inf"), float("nan")])
+def test_rejects_strength_outside_supported_range(lam: float) -> None:
+    """Outside 1e-6..1e9 the float32 solver would overflow and return NaN."""
+    with pytest.raises(ValueError, match="Strength must be between"):
         denoise_tv(np.zeros((4, 4)), lam=lam)
 
 

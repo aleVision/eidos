@@ -3,6 +3,7 @@
 import base64
 import io
 
+import httpx
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
@@ -28,9 +29,14 @@ def _photo(width: int, height: int, mode: str = "RGB") -> bytes:
     return buffer.getvalue()
 
 
-def _preview(client: TestClient, data: bytes, strength: float = 8.0, **extra: object):
+def _preview(
+    client: TestClient, data: bytes, strength: float | str = 8.0, **extra: object
+) -> httpx.Response:
     files = {"image": ("p.png", data, "image/png")}
-    return client.post("/tv/denoise", files=files, data={"strength": strength, **extra})
+    response: httpx.Response = client.post(
+        "/tv/denoise", files=files, data={"strength": strength, **extra}
+    )
+    return response
 
 
 def test_denoise_preview_shapes(client: TestClient) -> None:
@@ -78,8 +84,8 @@ def test_greyscale_and_rgba_uploads(client: TestClient, mode: str) -> None:
     assert _decode(response.json()["image_png"]).shape == (40, 60, 3)
 
 
-@pytest.mark.parametrize("strength", [0, -2])
-def test_strength_must_be_positive_422(client: TestClient, strength: float) -> None:
+@pytest.mark.parametrize("strength", [0, -2, 1e-40, 1e300, "inf", "nan"])
+def test_strength_outside_supported_range_422(client: TestClient, strength: float | str) -> None:
     assert _preview(client, _photo(30, 20), strength=strength).status_code == 422
 
 
