@@ -1,5 +1,6 @@
 """Face detection with the face map (Turk & Pentland 1991): suggest a face box."""
 
+import threading
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Form, HTTPException, Response, UploadFile, status
@@ -7,30 +8,30 @@ from fastapi import APIRouter, Form, HTTPException, Response, UploadFile, status
 from app.imaging import face_map_png, png_data_url, read_image
 from app.routers.demo import OrlRoot, download_orl
 from app.schemas import Box, DetectionOut, DetectorOut, DetectorStatus
-from app.services import NoDetectorError, load_detector, train_detector
+from app.services import NoDetectorError, detector_ready, load_detector, train_detector
 from eidos_core.detection import detect
 
 router = APIRouter(tags=["detection"])
 
+# Two setup requests at once (e.g. a double click) must not write the same files.
+_setup_lock = threading.Lock()
+
 
 @router.get("/detector", response_model=DetectorStatus)
 def detector_status() -> DetectorStatus:
-    try:
-        load_detector()
-    except NoDetectorError:
-        return DetectorStatus(available=False)
-    return DetectorStatus(available=True)
+    return DetectorStatus(available=detector_ready())
 
 
 @router.post("/detector", response_model=DetectorOut, status_code=status.HTTP_201_CREATED)
 def set_up_detector(root: OrlRoot, response: Response) -> DetectorOut:
     """Download ORL if needed and train the detector once. Adds no demo people."""
-    try:
-        _, info = load_detector()
-        response.status_code = status.HTTP_200_OK  # already set up
-    except NoDetectorError:
-        download_orl(root)
-        info = train_detector(root)
+    with _setup_lock:
+        if detector_ready():
+            _, info = load_detector()
+            response.status_code = status.HTTP_200_OK  # already set up
+        else:
+            download_orl(root)
+            info = train_detector(root)
     return DetectorOut(
         threshold=info.threshold,
         paper_threshold=info.paper_threshold,

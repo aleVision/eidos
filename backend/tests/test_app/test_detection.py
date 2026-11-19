@@ -183,3 +183,21 @@ def test_detect_blank_image_422(orl_client: TestClient) -> None:
     response = _detect(orl_client, blank)
     assert response.status_code == 422
     assert response.json()["detail"] == "No face-like region found"
+
+
+@pytest.mark.parametrize("damage", ["empty_json", "partial_json", "corrupt_npz"])
+def test_damaged_detector_files_count_as_not_set_up(orl_client: TestClient, damage: str) -> None:
+    """A crash while writing (or a broken file) must not make detection fail with 500
+    until the user deletes files by hand: it is simply 'not set up', and setup repairs it."""
+    orl_client.post("/detector")
+    if damage == "empty_json":
+        (settings.models_dir / "detector.json").write_text("")
+    elif damage == "partial_json":
+        (settings.models_dir / "detector.json").write_text('{"threshold": 4')
+    else:
+        (settings.models_dir / "detector.npz").write_bytes(b"PK\x03\x04 truncated")
+
+    assert orl_client.get("/detector").json() == {"available": False}
+    assert _detect(orl_client, _photo()).status_code == 409
+    assert orl_client.post("/detector").status_code == 201  # retrains and repairs
+    assert _detect(orl_client, _photo()).status_code == 200

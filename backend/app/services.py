@@ -1,6 +1,8 @@
 """Glue between storage (DB rows, files) and eidos_core. No HTTP concerns here."""
 
 import json
+import os
+import zipfile
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -155,9 +157,16 @@ def train_detector(orl_root: Path) -> DetectorInfo:
     )
     normalized_path, paper_path, info_path = _detector_paths()
     settings.models_dir.mkdir(parents=True, exist_ok=True)
-    save_model(normalized, normalized_path)
-    save_model(paper, paper_path)
-    info_path.write_text(json.dumps(asdict(info)))
+    # Write each file next to its final name, then rename: a crash never leaves a
+    # half-written file under the real name. The settings file goes last, so the
+    # detector only counts as set up once everything is in place.
+    for model, path in ((normalized, normalized_path), (paper, paper_path)):
+        temporary = path.with_name(path.name + ".tmp")
+        save_model(model, temporary)
+        os.replace(temporary, path)
+    temporary = info_path.with_name(info_path.name + ".tmp")
+    temporary.write_text(json.dumps(asdict(info)))
+    os.replace(temporary, info_path)
     return info
 
 
@@ -166,5 +175,21 @@ def load_detector(normalized: bool = True) -> tuple[EigenfaceModel, DetectorInfo
     normalized_path, paper_path, info_path = _detector_paths()
     if not all(p.exists() for p in (normalized_path, paper_path, info_path)):
         raise NoDetectorError
-    model = load_model(normalized_path if normalized else paper_path)
-    return model, DetectorInfo(**json.loads(info_path.read_text()))
+    try:
+        model = load_model(normalized_path if normalized else paper_path)
+        info = DetectorInfo(**json.loads(info_path.read_text()))
+    except (OSError, ValueError, KeyError, TypeError, zipfile.BadZipFile) as error:
+        # Damaged files (e.g. a crash while writing): treat as not set up, so
+        # setting up again repairs them instead of failing until deleted by hand.
+        raise NoDetectorError from error
+    return model, info
+
+
+def detector_ready() -> bool:
+    """True when both detector face spaces and their settings load correctly."""
+    try:
+        load_detector(normalized=True)
+        load_detector(normalized=False)
+    except NoDetectorError:
+        return False
+    return True
