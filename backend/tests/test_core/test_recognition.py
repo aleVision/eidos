@@ -71,3 +71,20 @@ def test_noise_is_not_a_face_with_suggested_thresholds(synthetic_faces: Faces) -
     noise = np.random.default_rng(7).uniform(0, 255, faces.shape[1])
     result = classify(model, noise, suggest_thresholds(model, faces, labels))
     assert result.outcome == Outcome.NOT_A_FACE
+
+
+def test_suggested_thresholds_work_when_model_is_full_rank(synthetic_faces: Faces) -> None:
+    """With few photos M' can reach M - 1: training faces then sit exactly in face
+    space (ε = 0), so thresholds must come from faces the model has not seen."""
+    faces, labels, held_out = _split(*synthetic_faces)
+    model = train(faces, labels, n_components=100, image_shape=SHAPE)
+    result = classify(model, held_out, suggest_thresholds(model, faces, labels))
+    assert result.outcome == Outcome.KNOWN
+
+
+def test_suggest_thresholds_needs_four_faces(synthetic_faces: Faces) -> None:
+    faces, labels = synthetic_faces
+    few, few_labels = faces[[0, 1, 5]], [labels[0], labels[1], labels[5]]
+    model = train(few, few_labels, n_components=2, image_shape=SHAPE)
+    with pytest.raises(ValueError, match="at least 4 face samples"):
+        suggest_thresholds(model, few, few_labels)

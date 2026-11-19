@@ -18,11 +18,14 @@ from enum import StrEnum
 
 import numpy as np
 
-from eidos_core.eigenfaces import EigenfaceModel, distance_from_face_space, project
+from eidos_core.eigenfaces import EigenfaceModel, distance_from_face_space, project, train
 
-# Margin applied on top of the training distances by `suggest_thresholds`.
-_THRESHOLD_MARGIN = 1.5
+# `suggest_thresholds`: percentile of held-out distances, and a margin on top.
+# Face space gets a generous margin, so real faces are rarely called "not a face";
+# the person threshold gets none, so strangers are less often taken for someone.
 _THRESHOLD_PERCENTILE = 95
+_PERSON_MARGIN = 1.0
+_FACE_SPACE_MARGIN = 1.5
 
 
 class Outcome(StrEnum):
@@ -78,17 +81,37 @@ def suggest_thresholds(
 ) -> Thresholds:
     """A simple, data-driven starting point the user can tune.
 
-    The paper leaves θ to the application. We take the 95th percentile of the
-    training faces' own distances (ε_k to their own person, and ε) and add a
-    50% margin, so typical enrolled faces are accepted and outliers are not.
+    The paper leaves θ to the application. Distances must be measured on faces
+    the model has not seen: with few photos, M' can reach M - 1 and every
+    training face then lies exactly in face space (ε = 0). So we use
+    leave-one-out: retrain without face i, then measure face i's ε and its ε_k
+    to its own person. Each threshold is the 95th percentile of those
+    distances, times a margin (1.0 for the person, 1.5 for face space).
     """
-    class_index = {int(c): i for i, c in enumerate(model.class_ids)}
+    label_list = list(labels)
     own_distances, face_distances = [], []
-    for face, label in zip(faces, labels, strict=True):
-        weights = project(model, face)
-        own_distances.append(np.linalg.norm(weights - model.class_vectors[class_index[label]]))
-        face_distances.append(distance_from_face_space(model, face))
+    for i, (face, label) in enumerate(zip(faces, label_list, strict=True)):
+        rest = [j for j in range(len(label_list)) if j != i]
+        try:
+            held_out_model = train(
+                faces[rest],
+                [label_list[j] for j in rest],
+                model.eigenfaces.shape[1],
+                model.image_shape,
+            )
+        except ValueError:  # too little data left without face i
+            continue
+        face_distances.append(distance_from_face_space(held_out_model, face))
+        if label in held_out_model.class_ids:
+            own = held_out_model.class_vectors[list(held_out_model.class_ids).index(label)]
+            own_distances.append(np.linalg.norm(project(held_out_model, face) - own))
+
+    if not face_distances:
+        raise ValueError("Setting thresholds needs at least 4 face samples")
+    if not own_distances:  # everyone has a single photo: use the spacing between people
+        gaps = np.linalg.norm(model.class_vectors[:, None] - model.class_vectors[None], axis=2)
+        own_distances = [0.5 * float(np.median(gaps[np.triu_indices(len(gaps), 1)]))]
     return Thresholds(
-        person=_THRESHOLD_MARGIN * float(np.percentile(own_distances, _THRESHOLD_PERCENTILE)),
-        face_space=_THRESHOLD_MARGIN * float(np.percentile(face_distances, _THRESHOLD_PERCENTILE)),
+        person=_PERSON_MARGIN * float(np.percentile(own_distances, _THRESHOLD_PERCENTILE)),
+        face_space=_FACE_SPACE_MARGIN * float(np.percentile(face_distances, _THRESHOLD_PERCENTILE)),
     )
