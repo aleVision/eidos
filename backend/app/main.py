@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse
 from app import models  # noqa: F401
 from app.config import DATA_DIR, settings
 from app.database import Base, engine
-from app.routers import demo, health, model, people, recognize
+from app.routers import demo, detection, health, model, people, recognize
 
 
 @asynccontextmanager
@@ -76,3 +76,4 @@ app.include_router(people.router)
 app.include_router(model.router)
 app.include_router(recognize.router)
 app.include_router(demo.router)
+app.include_router(detection.router)

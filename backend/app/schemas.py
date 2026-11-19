@@ -95,3 +95,19 @@ class TestPhoto(BaseModel):
     index: int
     enrolled: bool
     url: str
+
+
+class DetectorStatus(BaseModel):
+    available: bool
+
+
+class DetectorOut(BaseModel):
+    threshold: float
+    n_components: int
+
+
+class DetectionOut(BaseModel):
+    box: Box
+    distance: float  # ε at the suggested box
+    confident: bool  # ε below the detector's threshold
+    map_png: str  # data URL of the face map, sized like the photo
