@@ -35,6 +35,16 @@ def get_orl_root() -> Path:
 OrlRoot = Annotated[Path, Depends(get_orl_root)]
 
 
+def download_orl(root: Path) -> None:
+    """Make sure ORL is on disk; a failed download becomes a clear 502."""
+    try:
+        ensure_orl(root, settings.orl_url)
+    except (OSError, zipfile.BadZipFile, ValueError) as error:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, f"Could not download the ORL dataset: {error}"
+        ) from error
+
+
 def _demo_people(db: Session) -> list[Person]:
     return list(db.scalars(select(Person).where(Person.is_demo)).all())
 
@@ -43,12 +53,7 @@ def _demo_people(db: Session) -> list[Person]:
 def load_demo(db: DbSession, root: OrlRoot) -> DemoLoaded:
     if _demo_people(db):
         return DemoLoaded(people_added=0)
-    try:
-        ensure_orl(root, settings.orl_url)
-    except (OSError, zipfile.BadZipFile, ValueError) as error:
-        raise HTTPException(
-            status.HTTP_502_BAD_GATEWAY, f"Could not download the ORL dataset: {error}"
-        ) from error
+    download_orl(root)
     settings.images_dir.mkdir(parents=True, exist_ok=True)
     for subject in ENROLLED_SUBJECTS:
         person = Person(name=f"ORL s{subject}", is_demo=True)

@@ -17,9 +17,47 @@ A note on how we version this product, since it's part of the point:
 ## [Unreleased]
 
 ### Planned
-- **1.1.0** — Automatic face detection with the paper's distance-from-face-space
-  "face map" (backward-compatible enhancement of the 1991 milestone).
 - **2.0.0** — The 1992 milestone.
+
+## [1.1.0] - 2026-11-19
+
+Completes the 1991 milestone with the paper's second idea: locating faces with
+"face space" (Turk & Pentland 1991, Eqs. 10–15, Figure 7).
+
+### Added
+- `eidos_core.detection`: the face map ε(x, y), the distance from face space at
+  every position, computed with the paper's correlation formula (M′ + 2
+  correlations per map, about 340× faster than cropping every position, and tested
+  against that slow version), and a multi-size search for the best face box.
+- Brightness/contrast normalization of each box before measuring ε, the default
+  method. **This is not in the 1991 paper.** Measured on ORL faces, the paper's raw
+  ε rates flat walls and smooth gradients as more face-like than real faces;
+  normalization fixes that. The paper's raw ε remains available for comparison
+  (`method=paper`).
+- A detector face space trained once from ORL, independent of your people and of
+  retraining. API: `GET /detector`, `POST /detector`, `POST /detect`.
+- Frontend: uploading a photo pre-fills a suggested face box (People and
+  Recognize), with "Enable face detection", a "Show face map" overlay, and a
+  method selector to compare the normalized and paper methods.
+
+### Changed
+- `prepare` can standardize a face (`standardize_face=True`); recognition does not
+  use it, so 1.0.0 behavior is unchanged.
+- Photos the browser cannot open (e.g. HEIC) now show a message.
+
+### Notes
+- Detection searches portrait-sized faces only (at least 35% of the photo's
+  shorter side): ε is not comparable across sizes, so small background boxes
+  would otherwise win. Group photos with small faces get no useful suggestion;
+  draw the box yourself.
+- Known limitation: when a face fills most of the photo (a close selfie), the
+  suggestion often covers only part of the face, because smaller boxes score as
+  more face-like. Measured on held-out ORL faces in a portrait: 13/14 found at 42%
+  of the photo's width, 11/14 at 56%, 4/14 at 70%. Redraw the box when that
+  happens. Pinned by `pytest -m dataset` (the 70% case is an expected failure).
+- A suggestion is a best guess. "As face-like as real faces" means ε is within the
+  range of 95% of held-out real faces; a wrong box can score that well too, so
+  always check it.
 
 ## [1.0.0] - 2026-11-19
 

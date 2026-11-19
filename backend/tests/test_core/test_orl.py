@@ -3,10 +3,12 @@
 import zipfile
 from pathlib import Path
 
+import cv2
 import numpy as np
 import pytest
 
 from eidos_core.datasets.orl import ensure_orl, iter_orl, load_orl_image
+from eidos_core.detection import detect
 from eidos_core.eigenfaces import project, train
 from eidos_core.preprocess import prepare
 from tests.orl_fake import write_fake_orl
@@ -67,3 +69,46 @@ def test_ensure_orl_rejects_archive_without_orl_photos(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="no ORL photos"):
         ensure_orl(tmp_path / "orl", url=archive.as_uri())
     assert not (tmp_path / "orl").exists()
+
+
+def _portrait_hits(face_fraction: float, tmp_path_factory: pytest.TempPathFactory) -> int:
+    """Detection hits (box overlaps the true face by more than half) for 14 held-out
+    ORL faces placed in a 600 x 800 grey portrait at `face_fraction` of its width."""
+    root = ensure_orl(tmp_path_factory.getbasetemp() / "orl")
+    faces, labels = [], []
+    for subject, index, image in iter_orl(root):
+        if index <= 8:
+            faces.append(prepare(image, (0, 0, 92, 112), standardize_face=True))
+            labels.append(subject)
+    model = train(np.array(faces), labels, n_components=20)
+
+    hits = 0
+    for subject in range(1, 41, 3):
+        photo = np.full((800, 600), 128.0)
+        h = round(face_fraction * 600)
+        w = round(h * 92 / 112)
+        x, y = (600 - w) // 2, (800 - h) // 3
+        face = load_orl_image(root, subject, 10).astype(np.float64)
+        photo[y : y + h, x : x + w] = cv2.resize(face, (w, h), interpolation=cv2.INTER_CUBIC)
+        bx, by, bw, bh = detect(model, photo, normalize=True).box
+        overlap = max(0, min(bx + bw, x + w) - max(bx, x)) * max(
+            0, min(by + bh, y + h) - max(by, y)
+        )
+        hits += overlap / (bw * bh + w * h - overlap) > 0.5
+    return hits
+
+
+@pytest.mark.dataset
+def test_detection_finds_medium_portrait_faces(tmp_path_factory: pytest.TempPathFactory) -> None:
+    assert _portrait_hits(0.42, tmp_path_factory) >= 12
+
+
+@pytest.mark.dataset
+@pytest.mark.xfail(
+    strict=True,
+    reason="Known limitation (1.1.0): when a real face fills most of the photo, smaller "
+    "boxes on part of the face score as more face-like than the whole face (ε is not "
+    "comparable across sizes). Measured: 4/14 hits at 70%. If this passes, update the docs.",
+)
+def test_detection_finds_large_portrait_faces(tmp_path_factory: pytest.TempPathFactory) -> None:
+    assert _portrait_hits(0.70, tmp_path_factory) >= 12

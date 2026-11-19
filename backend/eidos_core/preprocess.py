@@ -20,6 +20,9 @@ FACE_SHAPE: tuple[int, int] = (112, 92)
 # (x, y, width, height) in pixels of the source image.
 FaceBox = tuple[int, int, int, int]
 
+# A face whose grey levels spread less than this is flat: it has no pattern to standardize.
+MIN_CONTRAST = 0.5
+
 # ITU-R BT.601 luma weights, the classic RGB -> grey conversion.
 _LUMA = np.array([0.299, 0.587, 0.114])
 
@@ -59,9 +62,26 @@ def gaussian_window(shape: tuple[int, int] = FACE_SHAPE, sigma_frac: float = 0.5
     return np.outer(gy, gx)
 
 
-def prepare(image: np.ndarray, box: FaceBox, use_window: bool = True) -> np.ndarray:
-    """Grey -> crop -> resize -> (Gaussian window) -> flat vector Γ of length N²."""
+def standardize(face: np.ndarray) -> np.ndarray:
+    """Zero mean, unit standard deviation: removes brightness and contrast.
+
+    Not in the 1991 paper. Face detection uses it (see eidos_core.detection),
+    because without it plain, low-contrast regions look more face-like than faces.
+    """
+    spread = face.std()
+    if spread < MIN_CONTRAST:
+        raise ValueError("Face box has no contrast")
+    standardized: np.ndarray = (face - face.mean()) / spread
+    return standardized
+
+
+def prepare(
+    image: np.ndarray, box: FaceBox, use_window: bool = True, standardize_face: bool = False
+) -> np.ndarray:
+    """Grey -> crop -> resize -> (standardize) -> (Gaussian window) -> flat vector Γ."""
     face = normalize(crop_face(to_grey(image), box))
+    if standardize_face:
+        face = standardize(face)
     if use_window:
         face = face * gaussian_window(face.shape)
     return face.ravel()

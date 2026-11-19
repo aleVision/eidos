@@ -73,7 +73,26 @@ export interface TestPhoto {
   url: string;
 }
 
-/** fetch wrapper: parses JSON and turns FastAPI's {detail} into an Error. */
+export type DetectMethod = "normalized" | "paper";
+
+export interface FaceSuggestion {
+  box: Box;
+  distance: number;
+  confident: boolean;
+  map_png: string;
+}
+
+/** An HTTP error from the API, with FastAPI's {detail} as the message. */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+  }
+}
+
+/** fetch wrapper: parses JSON and turns FastAPI's {detail} into an ApiError. */
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init);
   if (!response.ok) {
@@ -84,7 +103,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       // not JSON: keep the generic message
     }
-    throw new Error(message);
+    throw new ApiError(message, response.status);
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
@@ -129,3 +148,12 @@ export const recognize = (image: Blob, box: Box) =>
 export const loadDemo = () => request<{ people_added: number }>("/demo/orl", { method: "POST" });
 export const removeDemo = () => request<void>("/demo/orl", { method: "DELETE" });
 export const listTestPhotos = () => request<TestPhoto[]>("/demo/orl/test-photos");
+
+export const getDetector = () => request<{ available: boolean }>("/detector");
+export const setupDetector = () => request<unknown>("/detector", { method: "POST" });
+export function detectFace(image: Blob, method: DetectMethod): Promise<FaceSuggestion> {
+  const form = new FormData();
+  form.append("image", image, "image");
+  form.append("method", method);
+  return request<FaceSuggestion>("/detect", { method: "POST", body: form });
+}
