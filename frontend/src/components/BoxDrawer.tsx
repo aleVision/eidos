@@ -25,12 +25,15 @@ export default function BoxDrawer({ file, onChange, initialBox, overlay }: Props
   const [showOverlay, setShowOverlay] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const start = useRef<{ x: number; y: number } | null>(null);
+  // Once the user draws on this photo, a late suggestion must not replace their box.
+  const userDrew = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
     setImage(null);
     setBox(null);
     setError(null);
+    userDrew.current = false;
     onChange(null);
     // Apply the EXIF orientation, like an <img> does; the backend rotates the same way.
     createImageBitmap(file, { imageOrientation: "from-image" }).then(
@@ -48,7 +51,7 @@ export default function BoxDrawer({ file, onChange, initialBox, overlay }: Props
   }, [file]);
 
   useEffect(() => {
-    if (!initialBox) return;
+    if (!initialBox || userDrew.current) return;
     setBox(initialBox);
     onChange(initialBox);
     // onChange is intentionally not a dependency: only a new suggestion applies.
@@ -118,6 +121,7 @@ export default function BoxDrawer({ file, onChange, initialBox, overlay }: Props
     setBox(valid ? next : null);
     if (done) {
       start.current = null;
+      userDrew.current = true;
       onChange(valid ? next : null);
     }
   }
