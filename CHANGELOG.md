@@ -36,6 +36,7 @@ features and API are unchanged.
 - API: `POST /tv/denoise` (preview, up to 640 px, with the removed noise and the
   energy per iteration), `POST /tv/denoise.png` (download, up to 2048 px on the
   longer side), `GET /tv/sample.png` (a synthetic test scene with adjustable noise).
+  The strength λ must lie between 1e-6 and 1e9 (otherwise 422).
 - Frontend: a timeline with one entry per milestone year, and the 1992 tool: a
   strength slider, a before/after comparison, the removed noise, and the energy
   curve with a "settled / still moving" note.
