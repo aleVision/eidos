@@ -50,6 +50,11 @@ Completes the 1991 milestone with the paper's second idea: locating faces with
   shorter side): ε is not comparable across sizes, so small background boxes
   would otherwise win. Group photos with small faces get no useful suggestion;
   draw the box yourself.
+- Known limitation: when a face fills most of the photo (a close selfie), the
+  suggestion often covers only part of the face, because smaller boxes score as
+  more face-like. Measured on held-out ORL faces in a portrait: 13/14 found at 42%
+  of the photo's width, 11/14 at 56%, 4/14 at 70%. Redraw the box when that
+  happens. Pinned by `pytest -m dataset` (the 70% case is an expected failure).
 - A suggestion is a best guess. "As face-like as real faces" means ε is within the
   range of 95% of held-out real faces; a wrong box can score that well too, so
   always check it.
