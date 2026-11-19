@@ -1,5 +1,5 @@
 /* Eidos UI. Same palette as the 1991 infographic; system fonts only, so a
-   privacy-first app never calls a third-party font host. */
+   local-first app never calls a third-party font host. */
 :root {
   --bg: #f4f6f9;
   --panel: #ffffff;
