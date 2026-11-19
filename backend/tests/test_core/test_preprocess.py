@@ -54,7 +54,7 @@ def test_gaussian_window_peak_and_symmetry() -> None:
     assert w.shape == FACE_SHAPE
     assert w.max() == pytest.approx(1.0, abs=1e-3)
     np.testing.assert_allclose(w, w[::-1, ::-1])
-    assert w[0, 0] < 0.2
+    assert w[0, 0] < 0.5
 
 
 def test_prepare_returns_flat_vector() -> None:

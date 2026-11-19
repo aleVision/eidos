@@ -25,3 +25,5 @@ ignore_missing_imports = true   # third-party stubs (cv2, etc.) are incomplete
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+addopts = "-m 'not dataset'"
+markers = ["dataset: needs the real ORL download (network)"]

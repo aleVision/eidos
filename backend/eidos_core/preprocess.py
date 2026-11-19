@@ -49,7 +49,7 @@ def normalize(face: np.ndarray, shape: tuple[int, int] = FACE_SHAPE) -> np.ndarr
     return np.asarray(resized, dtype=np.float64)
 
 
-def gaussian_window(shape: tuple[int, int] = FACE_SHAPE, sigma_frac: float = 0.35) -> np.ndarray:
+def gaussian_window(shape: tuple[int, int] = FACE_SHAPE, sigma_frac: float = 0.5) -> np.ndarray:
     """A 2-D Gaussian peaking at 1 in the centre; sigma = sigma_frac x each dimension."""
     rows, cols = shape
     y = np.arange(rows) - (rows - 1) / 2
