@@ -112,3 +112,12 @@ class DetectionOut(BaseModel):
     distance: float  # ε at the suggested box
     confident: bool  # ε below the detector's threshold
     map_png: str  # data URL of the face map, sized like the photo
+
+
+class DenoiseOut(BaseModel):
+    image_png: str  # data URL of the cleaned preview
+    noise_png: str  # data URL of the removed noise (amplified, mid-grey = none)
+    energies: list[float]  # E(u) after each iteration
+    lam: float
+    width: int  # preview size
+    height: int
