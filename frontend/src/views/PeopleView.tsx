@@ -13,7 +13,7 @@ import {
   type Person,
   type Sample,
 } from "../api/client";
-import BoxDrawer from "../components/BoxDrawer";
+import FacePicker from "../components/FacePicker";
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -176,7 +176,7 @@ export default function PeopleView() {
                     accept="image/*"
                     onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                   />
-                  {file && <BoxDrawer file={file} onChange={setBox} />}
+                  {file && <FacePicker file={file} onChange={setBox} />}
                   <div className="row">
                     <button
                       className="btn primary"

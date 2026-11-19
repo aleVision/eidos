@@ -4,6 +4,10 @@ import type { Box } from "../api/client";
 interface Props {
   file: Blob;
   onChange: (box: Box | null) => void;
+  /** A suggested box (e.g. from face detection), shown and reported when it arrives. */
+  initialBox?: Box | null;
+  /** An image drawn over the photo when "Show face map" is ticked (a data URL). */
+  overlay?: string | null;
 }
 
 /**
@@ -13,26 +17,55 @@ interface Props {
  * crops. Browsers draw EXIF-rotated photos upright, and the backend rotates
  * them the same way before cropping, so the two always agree.
  */
-export default function BoxDrawer({ file, onChange }: Props) {
+export default function BoxDrawer({ file, onChange, initialBox, overlay }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [image, setImage] = useState<ImageBitmap | null>(null);
   const [box, setBox] = useState<Box | null>(null);
+  const [overlayImage, setOverlayImage] = useState<ImageBitmap | null>(null);
+  const [showOverlay, setShowOverlay] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const start = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setImage(null);
     setBox(null);
+    setError(null);
     onChange(null);
-    // createImageBitmap applies the EXIF orientation, like an <img> would.
-    createImageBitmap(file).then((bitmap) => {
-      if (!cancelled) setImage(bitmap);
-    }, () => !cancelled && onChange(null));
+    // Apply the EXIF orientation, like an <img> does; the backend rotates the same way.
+    createImageBitmap(file, { imageOrientation: "from-image" }).then(
+      (bitmap) => {
+        if (!cancelled) setImage(bitmap);
+      },
+      () => {
+        if (!cancelled) setError("This browser cannot open this image. Try a JPEG or PNG.");
+      }
+    );
     return () => {
       cancelled = true;
     };
     // onChange is intentionally not a dependency: a new file resets the box once.
   }, [file]);
+
+  useEffect(() => {
+    if (!initialBox) return;
+    setBox(initialBox);
+    onChange(initialBox);
+    // onChange is intentionally not a dependency: only a new suggestion applies.
+  }, [initialBox]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setOverlayImage(null);
+    if (!overlay) return;
+    fetch(overlay)
+      .then((response) => response.blob())
+      .then((blob) => createImageBitmap(blob))
+      .then((bitmap) => !cancelled && setOverlayImage(bitmap), () => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [overlay]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -42,15 +75,24 @@ export default function BoxDrawer({ file, onChange }: Props) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.drawImage(image, 0, 0);
+    const mapShown = showOverlay && overlayImage;
+    if (mapShown) {
+      ctx.globalAlpha = 0.8;
+      ctx.drawImage(overlayImage, 0, 0, canvas.width, canvas.height);
+      ctx.globalAlpha = 1;
+    }
     if (box) {
-      ctx.fillStyle = "rgba(0,0,0,0.45)";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(image, box.x, box.y, box.w, box.h, box.x, box.y, box.w, box.h);
+      if (!mapShown) {
+        // Dim everything outside the box, so the selected face stands out.
+        ctx.fillStyle = "rgba(0,0,0,0.45)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(image, box.x, box.y, box.w, box.h, box.x, box.y, box.w, box.h);
+      }
       ctx.strokeStyle = "#f0a43a";
       ctx.lineWidth = Math.max(2, canvas.width / 300);
       ctx.strokeRect(box.x, box.y, box.w, box.h);
     }
-  }, [image, box]);
+  }, [image, box, showOverlay, overlayImage]);
 
   /** Pointer position in natural image pixels, clamped to the image. */
   function toImage(event: React.PointerEvent<HTMLCanvasElement>) {
@@ -80,6 +122,8 @@ export default function BoxDrawer({ file, onChange }: Props) {
     }
   }
 
+  if (error) return <p className="error" role="alert">{error}</p>;
+
   return (
     <div className="drawer">
       <canvas
@@ -92,6 +136,17 @@ export default function BoxDrawer({ file, onChange }: Props) {
         onPointerMove={(e) => update(e, false)}
         onPointerUp={(e) => update(e, true)}
       />
+      {overlay && (
+        <label className="small row" htmlFor="show-face-map">
+          <input
+            id="show-face-map"
+            type="checkbox"
+            checked={showOverlay}
+            onChange={(e) => setShowOverlay(e.target.checked)}
+          />
+          Show face map (darker = more face-like, ε from Eq. 9 at every position)
+        </label>
+      )}
       <p className="small muted">
         {box
           ? `Face box: ${box.w} × ${box.h} px at (${box.x}, ${box.y}). Drag again to redo.`

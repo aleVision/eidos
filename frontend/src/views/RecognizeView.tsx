@@ -8,7 +8,7 @@ import {
   type TestPhoto,
   type Thresholds,
 } from "../api/client";
-import BoxDrawer from "../components/BoxDrawer";
+import FacePicker from "../components/FacePicker";
 import DistanceScatter, { quadrantOf } from "../components/DistanceScatter";
 
 const ORL_BOX: Box = { x: 0, y: 0, w: 92, h: 112 }; // ORL photos are already face crops
@@ -74,7 +74,7 @@ export default function RecognizeView() {
         <section className="card">
           <h2>Your photo</h2>
           <input id="query-file" type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          {file && <BoxDrawer file={file} onChange={setBox} />}
+          {file && <FacePicker file={file} onChange={setBox} />}
           <button className="btn primary" disabled={busy || !file || !box}
             onClick={() => file && box && run(file, box)}>
             {busy ? "Recognizing…" : "Recognize"}
