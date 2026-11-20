@@ -121,3 +121,32 @@ class DenoiseOut(BaseModel):
     lam: float
     width: int  # preview size
     height: int
+
+
+class FlowStageOut(BaseModel):
+    sigma_d: float
+    sigma_s: float
+    energy_start: float
+    energy_end: float
+    outlier_fraction: float  # data residuals beyond the outlier threshold
+
+
+class FlowOut(BaseModel):
+    flow_png: str  # colour wheel: hue = direction, saturation = speed / max_magnitude
+    outliers_png: str  # black = brightness constancy fails here
+    discontinuities_png: str  # black = the motion jumps here
+    arrows: list[list[float]]  # [x, y, u, v] on a coarse grid, in preview pixels
+    stages: list[FlowStageOut]
+    max_magnitude: float  # speed shown as full colour, in pixels
+    width: int  # preview size
+    height: int
+    method: str
+    smoothness: float
+
+
+class FlowSampleOut(FlowOut):
+    frame1_png: str
+    frame2_png: str
+    truth_png: str  # the true flow, same colour scale
+    epe: float  # mean endpoint error, pixels
+    angular_error: float  # mean angular error, degrees (Barron et al.)
