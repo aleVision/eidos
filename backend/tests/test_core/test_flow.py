@@ -120,3 +120,153 @@ def test_angular_error_zero_for_exact_and_known_value() -> None:
     # arccos is ill-conditioned near 1: rounding of ~1e-16 becomes ~1e-6 degrees.
     assert angular_error(u, v, u, v) == pytest.approx(0.0, abs=1e-4)
     assert angular_error(u, v, np.zeros((2, 2)), v) == pytest.approx(45.0)
+
+
+# --- The solver (paper §4: SOR + graduated non-convexity + coarse-to-fine) --------
+
+from eidos_core.flow import (  # noqa: E402
+    FlowResult,
+    _sor_sweep,
+    estimate_flow,
+    warp,
+)
+from eidos_core.flow import lorentzian_psi as _psi  # noqa: E402
+from eidos_core.synthetic_flow import two_surfaces  # noqa: E402
+
+
+def textured(size: int = 96, seed: int = 0) -> np.ndarray:
+    """Smooth random texture, 0-255: something to track."""
+    import cv2
+
+    noise = np.random.default_rng(seed).uniform(0, 255, (size, size)).astype(np.float32)
+    texture = cv2.GaussianBlur(noise, (0, 0), 2.0)
+    return (texture - texture.min()) / (texture.max() - texture.min()) * 255
+
+
+def shifted(image: np.ndarray, dx: float, dy: float) -> np.ndarray:
+    """The image's content moved by (dx, dy): result(x, y) = image(x − dx, y − dy)."""
+    return warp(image, np.full(image.shape, dx, np.float32), np.full(image.shape, dy, np.float32))
+
+
+def test_warp_sign_convention() -> None:
+    """warp(I, u, v)(x, y) = I(x − u, y − v): content moves by (+u, +v)."""
+    image = textured()
+    moved = shifted(image, 2.0, 0.0)
+    np.testing.assert_allclose(moved[10:-10, 12:-10], image[10:-10, 10:-12], atol=1e-3)
+
+
+def _sequential_sweep(u, v, ix, iy, it, sigma_d, sigma_s, lam_s, omega):  # type: ignore[no-untyped-def]
+    """Tests-only reference: visit red sites then black, one pixel at a time (Lorentzian)."""
+    u, v = u.copy(), v.copy()
+    h, w = u.shape
+    t_s = 4 * lam_s / sigma_s**2
+    for colour in (0, 1):
+        for y in range(h):
+            for x in range(w):
+                if (y + x) % 2 != colour:
+                    continue
+                for field, grad_image in ((u, ix), (v, iy)):
+                    r = ix[y, x] * u[y, x] + iy[y, x] * v[y, x] + it[y, x]
+                    grad = 5.0 * grad_image[y, x] * _psi(np.array(r), sigma_d)
+                    for ny, nx in ((y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)):
+                        if 0 <= ny < h and 0 <= nx < w:
+                            grad = grad + lam_s * _psi(
+                                np.array(field[y, x] - field[ny, nx]), sigma_s
+                            )
+                    bound = 5.0 * grad_image[y, x] ** 2 / sigma_d**2 + t_s
+                    field[y, x] -= omega * grad / bound
+    return u, v
+
+
+def test_red_black_sweep_equals_sequential_reference() -> None:
+    rng = np.random.default_rng(3)
+    u, v, ix, iy, it = (rng.normal(size=(5, 6)) for _ in range(5))
+    args = {"sigma_d": 2.0, "sigma_s": 0.8, "lam_s": 1.0}
+    fast = _sor_sweep(u, v, ix, iy, it, **args, robust=True, omega=1.5)
+    slow = _sequential_sweep(u, v, ix, iy, it, **args, omega=1.5)
+    np.testing.assert_allclose(fast[0], slow[0], rtol=1e-10)
+    np.testing.assert_allclose(fast[1], slow[1], rtol=1e-10)
+
+
+def _interior(a: np.ndarray, margin: int = 8) -> np.ndarray:
+    return a[margin:-margin, margin:-margin]
+
+
+def test_zero_motion_gives_zero_flow() -> None:
+    image = textured()
+    result = estimate_flow(image, image)
+    assert np.abs(result.u).max() < 0.01 and np.abs(result.v).max() < 0.01
+
+
+@pytest.mark.parametrize("robust", [True, False])
+def test_recovers_translation(robust: bool) -> None:
+    image = textured()
+    result = estimate_flow(image, shifted(image, 1.5, -0.5), robust=robust)
+    error = np.hypot(_interior(result.u) - 1.5, _interior(result.v) + 0.5).mean()
+    assert error < 0.15
+
+
+def test_robust_beats_quadratic_on_two_surfaces_with_noise() -> None:
+    """The paper's experiment (§6.1, Table 1): a textured square moving over a still
+    one, 10% noise. Paper: RMS horizontal error 0.18 (quadratic) vs 0.10 (robust)."""
+    frame1, frame2, u_true, v_true = two_surfaces(noise=0.1)
+    errors = {}
+    for robust in (True, False):
+        result = estimate_flow(frame1, frame2, robust=robust)
+        errors[robust] = np.sqrt(np.mean((result.u - u_true) ** 2))
+    assert errors[True] < 0.8 * errors[False]
+
+
+def test_discontinuities_lie_on_the_square_border() -> None:
+    frame1, frame2, u_true, _ = two_surfaces()
+    result = estimate_flow(frame1, frame2)
+    import cv2
+
+    square = (u_true != 0).astype(np.uint8)
+    border = cv2.morphologyEx(square, cv2.MORPH_GRADIENT, np.ones((5, 5), np.uint8)) > 0
+    marked = result.discontinuities
+    assert (marked & border).sum() / marked.sum() > 0.75  # most marks are on the border...
+    assert (marked & border).sum() / border.sum() > 0.5  # ...and most of the border is marked
+
+
+def test_energy_falls_within_each_stage() -> None:
+    frame1, frame2, _, _ = two_surfaces(noise=0.1)
+    for stage in estimate_flow(frame1, frame2).stages:
+        assert stage.energy_end <= stage.energy_start * (1 + 1e-6)
+
+
+def test_uniform_frames_no_nan() -> None:
+    flat = np.full((40, 50), 128.0)
+    result = estimate_flow(flat, flat)
+    assert np.isfinite(result.u).all() and np.isfinite(result.v).all()
+    assert np.abs(result.u).max() < 1e-6
+
+
+def test_large_motion_is_finite_and_flags_outliers() -> None:
+    """A documented limit: 3 pyramid levels cannot catch a 20 px jump."""
+    image = textured(128)
+    small = estimate_flow(image, shifted(image, 1.0, 0.0))
+    large = estimate_flow(image, shifted(image, 20.0, 0.0))
+    assert np.isfinite(large.u).all()
+    assert large.stages[-1].outlier_fraction > small.stages[-1].outlier_fraction
+
+
+def test_rejects_mismatched_sizes_and_bad_smoothness() -> None:
+    with pytest.raises(ValueError, match="same size"):
+        estimate_flow(np.zeros((10, 10)), np.zeros((10, 12)))
+    with pytest.raises(ValueError, match="Smoothness must be positive"):
+        estimate_flow(np.zeros((10, 10)), np.zeros((10, 10)), smoothness=0.0)
+
+
+def test_robust_lowers_sigma_quadratic_keeps_it() -> None:
+    image = textured(64)
+    robust = estimate_flow(image, image).stages
+    quadratic = estimate_flow(image, image, robust=False).stages
+    assert len(robust) == 6 and robust[0].sigma_d > robust[-1].sigma_d
+    assert len({(s.sigma_d, s.sigma_s) for s in quadratic}) == 1
+
+
+def test_colour_frames_are_accepted() -> None:
+    image = textured(48)
+    colour = np.stack([image] * 3, axis=-1)
+    assert isinstance(estimate_flow(colour, colour), FlowResult)

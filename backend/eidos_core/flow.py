@@ -23,7 +23,9 @@ where (s, t) runs over each pair of 4-connected neighbours once. Frames are grey
 with intensities 0-255 (the paper's parameter values are on that scale).
 """
 
+import math
 from collections.abc import Callable
+from dataclasses import dataclass
 
 import cv2
 import numpy as np
@@ -136,3 +138,206 @@ def angular_error(u: np.ndarray, v: np.ndarray, u_true: np.ndarray, v_true: np.n
     dot = u * u_true + v * v_true + 1.0
     norms = np.sqrt(u**2 + v**2 + 1.0) * np.sqrt(u_true**2 + v_true**2 + 1.0)
     return float(np.mean(np.degrees(np.arccos(np.clip(dot / norms, -1.0, 1.0)))))
+
+
+# --- The solver (paper §4.1-4.2 and §6) ---------------------------------------
+
+# Over-relaxation. The paper uses 1.995; measured here, with 20 sweeps per level that
+# value oscillates and the quadratic solve diverges (translation error 7.8 px).
+# 1.8 converges for both penalties (error ≤ 0.01 px on a 1.5 px translation).
+OMEGA = 1.8
+STAGES = 6  # graduated non-convexity: σ lowered linearly over 6 stages (paper §6)
+LEVELS = 3  # pyramid levels (paper §6)
+# SOR sweeps per level and stage. The paper uses 20; measured on the two-surface
+# scene (240 px, smoothness 1), the robust flow is then 0.17 px from the truth against
+# 0.07 px after 200 sweeps. 40 sweeps reach 0.13 px in ~2 s at 240 px.
+ITERATIONS = 40
+SIGMA_D = (18 / math.sqrt(2), 5 / math.sqrt(2))  # data term σ: first and last stage
+SIGMA_S = (3 / math.sqrt(2), 0.03 / math.sqrt(2))  # smoothness σ: first and last stage
+PRE_BLUR = 1.0  # Gaussian σ (px) applied to both frames so derivatives are reliable
+# Motion discontinuity threshold (px). The paper's eq. 28 sets it "experimentally";
+# √2·σ_S at the last stage (0.03 px) marks every ripple. Measured on the two-surface
+# scene: 0.2 px puts 82% of the marks on the square's border and finds 2/3 of it.
+DISCONTINUITY = 0.2
+
+
+@dataclass(frozen=True)
+class FlowStage:
+    sigma_d: float
+    sigma_s: float
+    energy_start: float  # E at the start of the stage's finest-level solve
+    energy_end: float  # ...and at its end (fixed linearization: never larger)
+    outlier_fraction: float  # data residuals with |r| ≥ √2·σ_D at the end of the stage
+
+
+@dataclass(frozen=True)
+class FlowResult:
+    u: np.ndarray  # rightward motion of each pixel of frame 1, in pixels
+    v: np.ndarray  # downward motion
+    data_outliers: np.ndarray  # bool: brightness constancy fails here (final stage)
+    discontinuities: np.ndarray  # bool: the flow jumps here (paper eq. 28)
+    stages: list[FlowStage]
+
+
+def warp(image: np.ndarray, u: np.ndarray, v: np.ndarray) -> np.ndarray:
+    """I(x − u, y − v), bilinear (paper eq. 29): the image's content moved by (u, v)."""
+    h, w = image.shape
+    ys, xs = np.mgrid[0:h, 0:w].astype(np.float32)
+    map_x = (xs - u).astype(np.float32)
+    map_y = (ys - v).astype(np.float32)
+    return np.asarray(
+        cv2.remap(image, map_x, map_y, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+    )
+
+
+def _sor_sweep(
+    u: np.ndarray,
+    v: np.ndarray,
+    ix: np.ndarray,
+    iy: np.ndarray,
+    it: np.ndarray,
+    sigma_d: float,
+    sigma_s: float,
+    lam_s: float,
+    robust: bool,
+    omega: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """One over-relaxation sweep, u_s ← u_s − ω·(∂E/∂u_s)/T(u_s) (paper eqs. 21-22, 27).
+
+    Red-black (checkerboard) order: same-coloured pixels are never neighbours, so
+    each colour updates in one numpy step and the result equals visiting the pixels
+    one by one in that order, the setting in which 0 < ω < 2 converges.
+    T bounds ∂²E/∂u_s²: the penalty's largest curvature is 1/σ² (Lorentzian) or 2/σ²
+    (quadratic), times λ_D·I_x² for the data term and 4·λ_S for the 4 neighbours.
+    """
+    u, v = u.copy(), v.copy()
+    curvature = 1.0 if robust else 2.0
+    t_s = curvature * 4.0 * lam_s / sigma_s**2
+    t_u = curvature * LAMBDA_D * ix**2 / sigma_d**2 + t_s
+    t_v = curvature * LAMBDA_D * iy**2 / sigma_d**2 + t_s
+    h, w = u.shape
+    checker = (np.add.outer(np.arange(h), np.arange(w)) % 2).astype(bool)
+    params = (sigma_d, sigma_s, lam_s, robust)
+    for colour in (~checker, checker):
+        grad_u, _ = _energy_gradient(u, v, ix, iy, it, *params)
+        u[colour] -= omega * grad_u[colour] / t_u[colour]
+        _, grad_v = _energy_gradient(u, v, ix, iy, it, *params)
+        v[colour] -= omega * grad_v[colour] / t_v[colour]
+    return u, v
+
+
+def _linearize(
+    frame1: np.ndarray, frame2: np.ndarray, u: np.ndarray, v: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Derivatives around the current flow, so that the data residual of the total flow
+    (u + du, v + dv) is I_x·u_total + I_y·v_total + it (it absorbs the current flow).
+
+    Frame 1 is warped towards frame 2 (paper eq. 29). I_x, I_y: central differences of
+    the average of warped frame 1 and frame 2; I_t = frame 2 − warped frame 1.
+    """
+    warped = warp(frame1, u, v)
+    iy, ix = np.gradient(0.5 * (warped + frame2))
+    it = frame2 - warped - ix * u - iy * v
+    return ix.astype(np.float32), iy.astype(np.float32), it.astype(np.float32)
+
+
+def _to_grey(frame: np.ndarray) -> np.ndarray:
+    grey = frame.astype(np.float32)
+    if grey.ndim == 3:
+        grey = np.asarray(cv2.cvtColor(grey[..., :3], cv2.COLOR_RGB2GRAY), dtype=np.float32)
+    return np.asarray(cv2.GaussianBlur(grey, (0, 0), PRE_BLUR))
+
+
+def _resize_flow(
+    u: np.ndarray, v: np.ndarray, shape: tuple[int, int]
+) -> tuple[np.ndarray, np.ndarray]:
+    """Resample a flow field to `shape`, scaling the vectors with the image."""
+    h, w = shape
+    sy, sx = h / u.shape[0], w / u.shape[1]
+    resize = lambda a: cv2.resize(a, (w, h), interpolation=cv2.INTER_LINEAR)  # noqa: E731
+    return np.asarray(resize(u)) * sx, np.asarray(resize(v)) * sy
+
+
+def _discontinuities(u: np.ndarray, v: np.ndarray, threshold: float) -> np.ndarray:
+    """Paper eq. 28: a pixel whose u or v differs from a neighbour's by ≥ threshold."""
+    marked = np.zeros(u.shape, dtype=bool)
+    for field in (u, v):
+        down = np.abs(np.diff(field, axis=0)) >= threshold
+        right = np.abs(np.diff(field, axis=1)) >= threshold
+        marked[:-1, :] |= down
+        marked[1:, :] |= down
+        marked[:, :-1] |= right
+        marked[:, 1:] |= right
+    return marked
+
+
+def estimate_flow(
+    frame1: np.ndarray,
+    frame2: np.ndarray,
+    smoothness: float = 1.0,
+    robust: bool = True,
+) -> FlowResult:
+    """Dense flow from frame 1 to frame 2 (grey or colour, intensities 0-255).
+
+    Robust: 6 graduated non-convexity stages, from a convex start (σ large, no
+    outliers, much like least squares) down to the paper's final σ. Stage 1 runs
+    coarse-to-fine over a 3-level pyramid to catch motions larger than a pixel;
+    later stages refine at full resolution, re-warping first (the paper repeats the
+    whole coarse-to-fine pass per stage; measured here, that was no better, and worse
+    at low smoothness, so the simpler schedule is kept). Quadratic (Horn &
+    Schunck): the same schedule at the first stage's σ, since it is already convex.
+    `smoothness` scales λ_S (the paper's λ_S = 1).
+    """
+    if frame1.shape[:2] != frame2.shape[:2]:
+        raise ValueError("Frames must have the same size")
+    if not smoothness > 0:
+        raise ValueError("Smoothness must be positive")
+    lam_s = float(smoothness)
+    pyramid = [(_to_grey(frame1), _to_grey(frame2))]
+    for _ in range(LEVELS - 1):
+        f1, f2 = pyramid[-1]
+        if min(f1.shape) < 8:
+            break
+        pyramid.append((np.asarray(cv2.pyrDown(f1)), np.asarray(cv2.pyrDown(f2))))
+
+    def sigmas(stage: int) -> tuple[float, float]:
+        if not robust:
+            return SIGMA_D[0], SIGMA_S[0]
+        t = stage / (STAGES - 1)
+        return (
+            SIGMA_D[0] + t * (SIGMA_D[1] - SIGMA_D[0]),
+            SIGMA_S[0] + t * (SIGMA_S[1] - SIGMA_S[0]),
+        )
+
+    coarsest = pyramid[-1][0].shape
+    u = np.zeros(coarsest, np.float32)
+    v = np.zeros(coarsest, np.float32)
+    stages = []
+    for stage in range(STAGES):
+        sigma_d, sigma_s = sigmas(stage)
+        params = (sigma_d, sigma_s, lam_s, robust)
+        levels = reversed(pyramid) if stage == 0 else [pyramid[0]]
+        for f1, f2 in levels:
+            u, v = _resize_flow(u, v, f1.shape) if u.shape != f1.shape else (u, v)
+            ix, iy, it = _linearize(f1, f2, u, v)
+            energy_start = flow_energy(u, v, ix, iy, it, *params)
+            for _ in range(ITERATIONS):
+                u, v = _sor_sweep(u, v, ix, iy, it, *params, omega=OMEGA)
+        residual = ix * u + iy * v + it
+        outliers = np.abs(residual) >= math.sqrt(2) * sigma_d
+        stages.append(
+            FlowStage(
+                sigma_d=sigma_d,
+                sigma_s=sigma_s,
+                energy_start=energy_start,
+                energy_end=flow_energy(u, v, ix, iy, it, *params),
+                outlier_fraction=float(outliers.mean()),
+            )
+        )
+    return FlowResult(
+        u=u,
+        v=v,
+        data_outliers=outliers,
+        discontinuities=_discontinuities(u, v, DISCONTINUITY),
+        stages=stages,
+    )
