@@ -281,3 +281,9 @@ def test_no_wild_flow_where_content_enters_the_frame(robust: bool) -> None:
     frame1, frame2 = image[:, 2:], image[:, :126]  # content moves right by 2 px
     result = estimate_flow(frame1, frame2, robust=robust)
     assert np.hypot(result.u, result.v).max() < 4.0
+
+
+@pytest.mark.parametrize("shape", [(1, 1), (240, 1), (5, 40)])
+def test_rejects_frames_too_small_to_measure(shape: tuple[int, int]) -> None:
+    with pytest.raises(ValueError, match="at least 8 pixels"):
+        estimate_flow(np.zeros(shape), np.zeros(shape))

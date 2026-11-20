@@ -23,3 +23,14 @@ def test_noise_is_uniform_within_the_requested_fraction_of_the_range() -> None:
     difference = noisy - clean
     assert np.abs(difference).max() <= 25.5 + 1e-3
     assert np.abs(difference).mean() > 10  # uniform on ±25.5 has mean |x| ≈ 12.75
+
+
+def test_truth_is_indexed_at_frame_2_pixels() -> None:
+    """The solver's flow at pixel x says where frame 2's content came from (frame 1
+    warped by I1(x − u) matches I2), so the truth marks the square where it is in
+    frame 2: shifted left by `motion`."""
+    size, motion = 64, 8.0
+    _, _, u_true, _ = two_surfaces(size=size, motion=motion)
+    columns = np.flatnonzero(u_true.any(axis=0))
+    assert columns.min() == size // 4 - int(motion)
+    assert columns.max() == 3 * size // 4 - 1 - int(motion)

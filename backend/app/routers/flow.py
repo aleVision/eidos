@@ -108,7 +108,7 @@ def estimate(
 @router.get("/sample", response_model=FlowSampleOut)
 def sample(
     motion: Annotated[float, Query(ge=0, le=8)] = 2.0,
-    noise: Annotated[float, Query(ge=0, le=0.3)] = 0.1,
+    noise: Annotated[float, Query(ge=0, le=0.3)] = 0.03,
     smoothness: Annotated[float, Query(ge=SMOOTHNESS_MIN, le=SMOOTHNESS_MAX)] = 1.0,
     method: Method = "robust",
 ) -> FlowSampleOut:

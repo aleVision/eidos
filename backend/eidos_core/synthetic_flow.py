@@ -32,7 +32,8 @@ def two_surfaces(
     its error levels (RMS horizontal flow 0.18 quadratic vs 0.10 robust) are matched
     in magnitude and order here, while replacing 10% of the pixels is far harsher.
     Returns frame1, frame2 (float32, 0-255) and the true flow
-    (u, v) at each pixel of frame 1.
+    (u, v) indexed at frame 2's pixels, as the solver reports it: the square moves
+    left, so the truth marks where the square is in frame 2.
     """
     rng = np.random.default_rng(seed)
     background = 40 + 175 * _texture(rng, size, 1.5)
@@ -47,7 +48,7 @@ def two_surfaces(
         amplitude = noise * 255.0
         frame2 = np.clip(frame2 + rng.uniform(-amplitude, amplitude, frame2.shape), 0, 255)
 
-    u_true = np.where(mask > 0, -float(motion), 0.0)
+    u_true = np.where(moved_mask > 0.5, -float(motion), 0.0)
     return (
         frame1.astype(np.float32),
         frame2.astype(np.float32),

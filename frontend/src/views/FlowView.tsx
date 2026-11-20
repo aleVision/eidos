@@ -53,7 +53,7 @@ function FlowPanel({ title, result, arrows }: { title: string; result: FlowResul
         </figure>
         <figure>
           <img src={result.discontinuities_png} alt={`${title}: motion discontinuities`} />
-          <figcaption className="small muted">Motion discontinuities</figcaption>
+          <figcaption className="small muted">Motion discontinuities (noise adds false marks)</figcaption>
         </figure>
       </div>
     </figure>
@@ -62,7 +62,7 @@ function FlowPanel({ title, result, arrows }: { title: string; result: FlowResul
 
 export default function FlowView() {
   const [motion, setMotion] = useState(2);
-  const [noise, setNoise] = useState(0.1);
+  const [noise, setNoise] = useState(0.03);
   const [photos, setPhotos] = useState<{ frame1?: File; frame2?: File }>({});
   const [usePhotos, setUsePhotos] = useState(false);
   const [position, setPosition] = useState(DEFAULT_POSITION);
@@ -115,6 +115,12 @@ export default function FlowView() {
   const sampleQuadratic = quadratic && "epe" in quadratic ? quadratic : null;
   const stagePoints = (robust?.stages ?? []).map((s, i) => [i + 1, s.outlier_fraction] as [number, number]);
 
+  function chooseSource(photos: boolean) {
+    setUsePhotos(photos);
+    setRobust(null); // never show one source's results next to another
+    setQuadratic(null);
+  }
+
   function choosePhoto(which: "frame1" | "frame2", file: File | undefined) {
     setPhotos((p) => ({ ...p, [which]: file }));
     setRobust(null);
@@ -145,10 +151,10 @@ export default function FlowView() {
           <h3>Frames</h3>
           <div className="row" role="radiogroup" aria-label="Frames source">
             <label className="row small">
-              <input type="radio" checked={!usePhotos} onChange={() => setUsePhotos(false)} /> The paper's test
+              <input type="radio" checked={!usePhotos} onChange={() => chooseSource(false)} /> The paper's test
             </label>
             <label className="row small">
-              <input type="radio" checked={usePhotos} onChange={() => setUsePhotos(true)} /> Two of your photos
+              <input type="radio" checked={usePhotos} onChange={() => chooseSource(true)} /> Two of your photos
             </label>
           </div>
           {!usePhotos ? (

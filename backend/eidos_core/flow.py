@@ -172,8 +172,11 @@ class FlowStage:
 
 @dataclass(frozen=True)
 class FlowResult:
-    u: np.ndarray  # rightward motion of each pixel of frame 1, in pixels
-    v: np.ndarray  # downward motion
+    # Motion in pixels, indexed at frame 2's pixels: frame 1 warped by (u, v), i.e.
+    # I1(x − u, y − v), matches frame 2, so (u, v) says where each frame-2 pixel's
+    # content came from (paper eq. 29's backward warp).
+    u: np.ndarray  # rightward
+    v: np.ndarray  # downward
     data_outliers: np.ndarray  # bool: brightness constancy fails here (final stage)
     discontinuities: np.ndarray  # bool: the flow jumps here (paper eq. 28)
     stages: list[FlowStage]
@@ -288,7 +291,8 @@ def estimate_flow(
     smoothness: float = 1.0,
     robust: bool = True,
 ) -> FlowResult:
-    """Dense flow from frame 1 to frame 2 (grey or colour, intensities 0-255).
+    """Dense flow from frame 1 to frame 2 (grey or colour, intensities 0-255),
+    indexed at frame 2's pixels (see FlowResult).
 
     Robust: 6 graduated non-convexity stages, from a convex start (σ large, no
     outliers, much like least squares) down to the paper's final σ. Stage 1 runs
@@ -303,6 +307,8 @@ def estimate_flow(
         raise ValueError("Frames must have the same size")
     if not smoothness > 0:
         raise ValueError("Smoothness must be positive")
+    if min(frame1.shape[:2]) < 8:
+        raise ValueError("Frames must be at least 8 pixels on each side")
     lam_s = float(smoothness)
     pyramid = [(_to_grey(frame1), _to_grey(frame2))]
     for _ in range(LEVELS - 1):

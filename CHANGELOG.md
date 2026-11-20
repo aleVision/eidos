@@ -46,8 +46,8 @@ unchanged.
   sample's errors.
 
 ### Measured choices (where Eidos departs from the paper's numbers)
-- **ω = 1.8, not 1.995:** with 20-40 sweeps per level, 1.995 oscillates and the
-  quadratic solve diverges.
+- **ω = 1.8, not 1.995:** measured with 20 sweeps per level, 1.995 oscillates and
+  the quadratic solve diverges.
 - **40 sweeps per level, not 20:** at 20 the robust flow was 0.17 px from the truth
   against 0.07 px when converged; 40 sweeps reach 0.13 px.
 - **Coarse-to-fine only in the first stage:** repeating it every stage, as the
@@ -68,7 +68,12 @@ unchanged.
   them in.
 - **Speed:** grey only, previews at 240 px; about 2 s per robust solve (CPU,
   NumPy).
-- With noise, the discontinuity map has many false marks.
+- With noise, the discontinuity map has many false marks: at the default sample
+  noise (±8 grey levels) 4.6% of pixels are marked, 75% of them on the square's
+  border; at ±26 grey levels, 60% of all pixels. The sample therefore starts at
+  ±8.
+- Flow is indexed at frame 2's pixels (where each pixel's content came from), as
+  the paper's backward warp gives it.
 
 ## [2.0.1] - 2026-11-20
 

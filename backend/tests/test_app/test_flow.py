@@ -132,3 +132,11 @@ def test_sample_robust_beats_quadratic_with_noise(client: TestClient) -> None:
 @pytest.mark.parametrize("params", [{"motion": 9}, {"noise": 0.5}, {"smoothness": 20}])
 def test_sample_bounds_422(client: TestClient, params: dict[str, float]) -> None:
     assert client.get("/flow/sample", params=params).status_code == 422
+
+
+def test_default_sample_discontinuity_map_is_readable(client: TestClient) -> None:
+    """At the default noise the map must mark mostly the square's border, not the
+    whole frame (at noise 0.1 it marked 60% of all pixels)."""
+    body = client.get("/flow/sample").json()
+    marked = _decode(body["discontinuities_png"]) == 0
+    assert marked.mean() < 0.10
