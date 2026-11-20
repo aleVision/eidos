@@ -238,6 +238,17 @@ def _linearize(
     warped = warp(frame1, u, v)
     iy, ix = np.gradient(0.5 * (warped + frame2))
     it = frame2 - warped - ix * u - iy * v
+    # No reliable measurement (1) where the warp reads from outside frame 1, e.g.
+    # content entering the frame, and (2) on the outer pixel ring, where the derivatives
+    # are one-sided. Switch the data term off there, so the smoothness term fills the
+    # flow in from the neighbours. Measured without this: up to 59 px of flow at the
+    # border for a 2 px motion, from invented border values and false matches.
+    h, w = frame1.shape
+    ys, xs = np.mgrid[0:h, 0:w]
+    outside = (xs - u < 0) | (xs - u > w - 1) | (ys - v < 0) | (ys - v > h - 1)
+    outside |= (ys == 0) | (ys == h - 1) | (xs == 0) | (xs == w - 1)
+    for derivative in (ix, iy, it):
+        derivative[outside] = 0.0
     return ix.astype(np.float32), iy.astype(np.float32), it.astype(np.float32)
 
 

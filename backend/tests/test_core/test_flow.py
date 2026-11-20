@@ -270,3 +270,14 @@ def test_colour_frames_are_accepted() -> None:
     image = textured(48)
     colour = np.stack([image] * 3, axis=-1)
     assert isinstance(estimate_flow(colour, colour), FlowResult)
+
+
+@pytest.mark.parametrize("robust", [True, False])
+def test_no_wild_flow_where_content_enters_the_frame(robust: bool) -> None:
+    """At the edge where frame 2 shows content frame 1 never saw, there is no
+    measurement: the flow must follow its neighbours, not run off (it reached 59 px
+    for a 2 px motion before the data term was switched off outside the frame)."""
+    image = textured(128)
+    frame1, frame2 = image[:, 2:], image[:, :126]  # content moves right by 2 px
+    result = estimate_flow(frame1, frame2, robust=robust)
+    assert np.hypot(result.u, result.v).max() < 4.0

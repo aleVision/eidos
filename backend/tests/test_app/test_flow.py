@@ -50,6 +50,13 @@ def test_estimate_payload(client: TestClient) -> None:
     assert mean_u == pytest.approx(2.0, abs=0.3)
 
 
+def test_colour_scale_ignores_a_few_wild_pixels(client: TestClient) -> None:
+    """Pixels at the edge where new content appears get wild flow; the colour scale
+    must follow the motion of the image (99th percentile), not its single worst pixel."""
+    body = _estimate(client, *_pair(dx=2)).json()
+    assert body["max_magnitude"] == pytest.approx(2.0, abs=0.5)
+
+
 def test_quadratic_differs_from_robust(client: TestClient) -> None:
     pair = _pair()
     robust = _estimate(client, *pair).json()

@@ -75,6 +75,12 @@ def _payload(result: FlowResult, max_magnitude: float, method: Method, smoothnes
     }
 
 
+def _colour_scale(result: FlowResult) -> float:
+    """Speed shown as full colour: the 99th percentile, so that a few wild pixels (e.g.
+    at an edge where new content appears) do not wash out the whole map."""
+    return float(np.percentile(np.hypot(result.u, result.v), 99)) or 1.0
+
+
 def _solve(frame1: np.ndarray, frame2: np.ndarray, smoothness: float, method: Method) -> FlowResult:
     try:
         return estimate_flow(frame1, frame2, smoothness=smoothness, robust=method == "robust")
@@ -96,8 +102,7 @@ def estimate(
     result = _solve(
         _fit(first, PREVIEW_MAX_SIDE), _fit(second, PREVIEW_MAX_SIDE), smoothness, method
     )
-    speed = float(np.hypot(result.u, result.v).max()) or 1.0
-    return FlowOut(**_payload(result, speed, method, smoothness))
+    return FlowOut(**_payload(result, _colour_scale(result), method, smoothness))
 
 
 @router.get("/sample", response_model=FlowSampleOut)

@@ -190,3 +190,60 @@ export async function denoiseDownload(image: Blob, strength: number): Promise<Bl
 }
 
 export const sampleUrl = (noise: number) => `/tv/sample.png?noise=${noise}`;
+
+// 1993 · Robust optical flow (stateless: nothing is stored)
+
+export type FlowMethod = "robust" | "quadratic";
+
+export interface FlowStage {
+  sigma_d: number;
+  sigma_s: number;
+  energy_start: number;
+  energy_end: number;
+  outlier_fraction: number;
+}
+
+export interface FlowResult {
+  flow_png: string;
+  outliers_png: string;
+  discontinuities_png: string;
+  arrows: [number, number, number, number][]; // x, y, u, v in preview pixels
+  stages: FlowStage[];
+  max_magnitude: number;
+  width: number;
+  height: number;
+  method: FlowMethod;
+  smoothness: number;
+}
+
+export interface FlowSample extends FlowResult {
+  frame1_png: string;
+  frame2_png: string;
+  truth_png: string;
+  epe: number;
+  angular_error: number;
+}
+
+export function estimateFlow(
+  frame1: Blob,
+  frame2: Blob,
+  smoothness: number,
+  method: FlowMethod
+): Promise<FlowResult> {
+  const form = new FormData();
+  form.append("frame1", frame1, "frame1");
+  form.append("frame2", frame2, "frame2");
+  form.append("smoothness", String(smoothness));
+  form.append("method", method);
+  return request<FlowResult>("/flow/estimate", { method: "POST", body: form });
+}
+
+export const flowSample = (motion: number, noise: number, smoothness: number, method: FlowMethod) =>
+  request<FlowSample>(
+    `/flow/sample?${new URLSearchParams({
+      motion: String(motion),
+      noise: String(noise),
+      smoothness: String(smoothness),
+      method,
+    })}`
+  );

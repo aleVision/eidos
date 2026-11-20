@@ -11,7 +11,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: Object.fromEntries(
-      ["/health", "/people", "/samples", "/model", "/recognize", "/demo", "/detect", "/tv"].map((path) => [
+      ["/health", "/people", "/samples", "/model", "/recognize", "/demo", "/detect", "/tv", "/flow"].map((path) => [
         path,
         process.env.EIDOS_API_URL ?? "http://127.0.0.1:8000",
       ])
