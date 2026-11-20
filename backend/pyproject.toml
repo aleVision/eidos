@@ -1,6 +1,6 @@
 [project]
 name = "eidos-backend"
-version = "2.0.0"
+version = "2.0.1"
 description = "Eidos backend — a computer vision product that grows one historical milestone per year."
 requires-python = ">=3.12"
 

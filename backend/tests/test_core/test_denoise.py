@@ -78,8 +78,26 @@ def test_matches_gradient_flow_energy() -> None:
     f = noisy_step()
     fast = tv_energy(denoise_tv(f, lam=8.0, n_iter=300).image, f, 8.0)
     reference = tv_energy(gradient_flow_reference(f, lam=8.0), f, 8.0)
-    assert fast <= 1.01 * reference  # Chambolle reaches the minimum...
+    assert fast <= 1.01 * reference  # the solver reaches the minimum...
     assert reference <= 1.05 * fast  # ...and the reference really is near it too
+
+
+@pytest.mark.parametrize("lam", [8.0, 2.0, 1.0])
+def test_default_iterations_reach_the_minimum_across_the_slider_range(lam: float) -> None:
+    """The default iterations must land near the true minimum (here: 3,000
+    iterations) across the slider (λ 64 down to 1), or strong settings show the
+    solver's unfinished blur and halos instead of the ROF result."""
+    f = noisy_step(size=64)
+    fast = denoise_tv(f, lam).image
+    converged = denoise_tv(f, lam, n_iter=3000).image
+    assert tv_energy(fast, f, lam) <= 1.02 * tv_energy(converged, f, lam)
+    assert np.abs(fast - converged).max() < 4 / 255  # no visible leftover (≤ 3 grey levels)
+
+
+@pytest.mark.parametrize(("lam", "expected"), [(64.0, 100), (4.0, 100), (2.0, 142), (1.0, 200)])
+def test_default_iterations_grow_as_strength_increases(lam: float, expected: int) -> None:
+    """The accelerated solver's error falls like 1/(λ·k²), so k ∝ 1/√λ keeps it constant."""
+    assert len(denoise_tv(noisy_step(), lam).energies) == expected
 
 
 def test_energy_does_not_increase() -> None:
@@ -100,9 +118,10 @@ def test_huge_strength_returns_input() -> None:
 
 
 def test_tiny_strength_flattens() -> None:
-    """A very strong setting flattens the image. Chambolle converges slowly there
-    (measured: ~3,000 iterations at λ = 0.001), so this tests the model, run to
-    convergence; the product keeps λ where 100 iterations suffice."""
+    """A very strong setting flattens the image. Far below the slider's range the
+    acceleration has little effect (its rate is proportional to λ), so this tests
+    the model run to convergence (thousands of iterations at λ = 0.001); the
+    product keeps λ ≥ 1, where 100 iterations suffice."""
     f = np.clip(noisy_step(), 0, 1)
     assert denoise_tv(f, lam=1e-3, n_iter=3000).image.std() < 0.1 * f.std()
 
@@ -128,6 +147,12 @@ def test_keeps_edges_sharper_than_gaussian_blur() -> None:
     blur = min(blurs, key=lambda b: abs(b[flat].std() - tv_noise))
 
     assert _edge_width(tv) < 0.5 * _edge_width(blur)
+
+
+def test_works_in_float32() -> None:
+    """float32 halves memory and time on large photos; a stray float64 scalar
+    (e.g. from np.sqrt) would silently promote every array to float64."""
+    assert denoise_tv(noisy_step(), lam=8.0, n_iter=3).image.dtype == np.float32
 
 
 def test_colour_shape_and_range() -> None:

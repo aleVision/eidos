@@ -1,6 +1,6 @@
 """1992 · Total variation denoising (Rudin, Osher & Fatemi). Stateless: nothing is stored.
 
-Model 1992 (the ROF energy), solver 2004 (Chambolle); see eidos_core.denoise.
+Model 1992 (the ROF energy), solver 2011 (Chambolle & Pock); see eidos_core.denoise.
 """
 
 from typing import Annotated
@@ -15,8 +15,8 @@ from eidos_core.denoise import denoise_tv
 
 router = APIRouter(prefix="/tv", tags=["1992 · total variation"])
 
-# Measured (100 iterations, colour): 640 px ≈ 1.3 s for a live preview; 2048 px
-# (3 MP) ≈ 20 s for a download. Larger photos are scaled down to these sizes.
+# Measured (colour, λ = 8 / strongest λ = 1): 640 px ≈ 1.7 / 2.9 s for a live preview;
+# 2048 px (3 MP) ≈ 23 / 44 s for a download. Larger photos are scaled down to these sizes.
 PREVIEW_MAX_SIDE = 640
 DOWNLOAD_MAX_SIDE = 2048
 _NOISE_GAIN = 4.0  # the removed noise is faint; amplify it so it can be seen
