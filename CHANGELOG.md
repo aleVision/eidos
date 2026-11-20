@@ -28,8 +28,9 @@ A note on how we version this product, since it's part of the point:
   unfinished solver, not the ROF model. Eidos now uses Chambolle & Pock's
   accelerated primal-dual algorithm (2011). Its error falls like 1/(λ·k²), so the
   number of iterations now grows like 1/√λ: 100 for λ ≥ 4, up to 200 at λ = 1.
-  Across the whole slider the result is within 3 grey levels of the converged
-  one (tested). Speed at λ = 8 is about the same (preview ≈ 1.7 s, 2048 px
+  Across the whole slider the result is within a few grey levels (at most about
+  7 of 255) of the converged one (tested). The energy falls overall but may
+  wobble slightly: an accelerated method is not a descent method. Speed at λ = 8 is about the same (preview ≈ 1.7 s, 2048 px
   download ≈ 23 s); the strongest setting takes up to twice as long (≈ 2.9 s and
   ≈ 44 s).
 - **The "settled / still moving" note was misleading.** A small change over the

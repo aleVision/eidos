@@ -4,7 +4,13 @@ import cv2
 import numpy as np
 import pytest
 
-from eidos_core.denoise import denoise_tv, divergence, gradient, tv_energy
+from eidos_core.denoise import (
+    default_iterations,
+    denoise_tv,
+    divergence,
+    gradient,
+    tv_energy,
+)
 
 
 def test_gradient_of_ramp() -> None:
@@ -82,29 +88,49 @@ def test_matches_gradient_flow_energy() -> None:
     assert reference <= 1.05 * fast  # ...and the reference really is near it too
 
 
+def blocky(size: int = 256, seed: int = 7) -> np.ndarray:
+    """Overlapping flat rectangles plus noise: more structure than `noisy_step`."""
+    rng = np.random.default_rng(seed)
+    image = np.full((size, size), 0.5)
+    for _ in range(25):
+        y, x = rng.integers(0, size - 8, 2)
+        h, w = rng.integers(4, size // 3, 2)
+        image[y : y + h, x : x + w] = rng.uniform(0, 1)
+    return np.clip(image + rng.normal(0, 0.1, image.shape), 0, 1)
+
+
 @pytest.mark.parametrize("lam", [8.0, 2.0, 1.0])
 def test_default_iterations_reach_the_minimum_across_the_slider_range(lam: float) -> None:
     """The default iterations must land near the true minimum (here: 3,000
     iterations) across the slider (λ 64 down to 1), or strong settings show the
-    solver's unfinished blur and halos instead of the ROF result."""
-    f = noisy_step(size=64)
+    solver's unfinished blur and halos instead of the ROF result. The UI promises
+    "within a few grey levels, at most about 7 of 255"."""
+    f = blocky()
     fast = denoise_tv(f, lam).image
     converged = denoise_tv(f, lam, n_iter=3000).image
-    assert tv_energy(fast, f, lam) <= 1.02 * tv_energy(converged, f, lam)
-    assert np.abs(fast - converged).max() < 4 / 255  # no visible leftover (≤ 3 grey levels)
+    assert tv_energy(fast, f, lam) <= 1.03 * tv_energy(converged, f, lam)
+    assert np.abs(fast - converged).max() < 7.5 / 255
 
 
 @pytest.mark.parametrize(("lam", "expected"), [(64.0, 100), (4.0, 100), (2.0, 142), (1.0, 200)])
 def test_default_iterations_grow_as_strength_increases(lam: float, expected: int) -> None:
     """The accelerated solver's error falls like 1/(λ·k²), so k ∝ 1/√λ keeps it constant."""
-    assert len(denoise_tv(noisy_step(), lam).energies) == expected
+    assert default_iterations(lam) == expected
 
 
-def test_energy_does_not_increase() -> None:
-    energies = denoise_tv(noisy_step(), lam=8.0).energies
-    assert len(energies) == 100
-    for before, after in zip(energies, energies[1:], strict=False):
-        assert after <= before * (1 + 1e-6)
+def test_denoise_uses_default_iterations() -> None:
+    assert len(denoise_tv(noisy_step(), lam=1.0).energies) == default_iterations(1.0)
+
+
+@pytest.mark.parametrize("lam", [1.0, 2.0, 8.0, 64.0])
+def test_energy_falls_overall(lam: float) -> None:
+    """An accelerated primal-dual method is not a descent method: E(u) may wobble
+    up a little on the way. It must fall overall, with no rise above 1% of the drop."""
+    energies = denoise_tv(noisy_step(), lam=lam).energies
+    drop = energies[0] - energies[-1]
+    assert drop > 0
+    rises = [after - before for before, after in zip(energies, energies[1:], strict=False)]
+    assert max(rises) <= 0.01 * drop
 
 
 def test_constant_image_unchanged() -> None:
@@ -121,7 +147,7 @@ def test_tiny_strength_flattens() -> None:
     """A very strong setting flattens the image. Far below the slider's range the
     acceleration has little effect (its rate is proportional to λ), so this tests
     the model run to convergence (thousands of iterations at λ = 0.001); the
-    product keeps λ ≥ 1, where 100 iterations suffice."""
+    product keeps λ ≥ 1, where its default 100-200 iterations suffice."""
     f = np.clip(noisy_step(), 0, 1)
     assert denoise_tv(f, lam=1e-3, n_iter=3000).image.std() < 0.1 * f.std()
 

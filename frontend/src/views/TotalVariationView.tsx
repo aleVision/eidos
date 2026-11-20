@@ -4,7 +4,7 @@ import CompareSlider from "../components/CompareSlider";
 import LineChart from "../components/LineChart";
 
 // Strength slider (0 = gentle, 100 = strong) on a log scale of λ from 64 to 1:
-// across this whole range, 100 solver iterations land near the minimum (tested). Larger λ stays closer
+// across this whole range, the default 100-200 solver iterations land near the minimum (tested). Larger λ stays closer
 // to the photo; smaller λ removes more.
 const LAM_GENTLE = 64;
 const LAM_STRONG = 1;
@@ -196,12 +196,15 @@ export default function TotalVariationView() {
                 yFormat={(v) => (v >= 1000 ? `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : v.toFixed(0))}
               />
             )}
-            <p className="small muted">
-              The solver lowers E(u) step by step. Eidos stops after {energies.length || 100}{" "}
-              iterations (more for stronger settings); the tests check that this lands within 3 grey
-              levels of the true minimum across the whole strength range. A small change per step
-              alone would not prove that.
-            </p>
+            {energies.length > 0 && (
+              <p className="small muted">
+                The solver lowers E(u) overall; an accelerated method may wobble slightly on the way.
+                Eidos stops after {energies.length} iterations (more for stronger settings); the tests
+                check that this lands within a few grey levels (at most about 7 of 255) of the true
+                minimum across the whole strength range. A small change per step alone would not
+                prove that.
+              </p>
+            )}
           </section>
         </div>
       )}
