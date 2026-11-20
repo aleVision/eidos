@@ -17,7 +17,37 @@ A note on how we version this product, since it's part of the point:
 ## [Unreleased]
 
 ### Planned
-- **2.0.0** — The 1992 milestone.
+- **3.0.0** — The 1993 milestone.
+
+## [2.0.0] - 2026-11-19
+
+The 1992 milestone: total variation denoising, from L. I. Rudin, S. Osher and
+E. Fatemi, "Nonlinear total variation based noise removal algorithms",
+*Physica D* 60:259–268, 1992. A new year, so a new MAJOR version; the 1991
+features and API are unchanged.
+
+### Added
+- `eidos_core.denoise`: the ROF model, minimizing E(u) = Σ|∇u| + (λ/2)·Σ(u − f)².
+  Removes noise but keeps edges sharp, which blurring cannot do (tested against
+  Gaussian blur at equal noise reduction).
+- **Model 1992 · solver 2004.** The energy is the 1992 contribution; to find its
+  minimum Eidos uses Chambolle's dual algorithm (2004), simpler and more stable
+  than the paper's gradient flow. The tests check it against that gradient flow.
+- API: `POST /tv/denoise` (preview, up to 640 px, with the removed noise and the
+  energy per iteration), `POST /tv/denoise.png` (download, up to 2048 px on the
+  longer side), `GET /tv/sample.png` (a synthetic test scene with adjustable noise).
+  The strength λ must lie between 1e-6 and 1e9 (otherwise 422).
+- Frontend: a timeline with one entry per milestone year, and the 1992 tool: a
+  strength slider, a before/after comparison, the removed noise, and the energy
+  curve with a "settled / still moving" note.
+
+### Known limitations
+- **Staircasing:** strong settings turn gentle gradients into flat steps.
+- **Contrast loss:** ROF lowers the contrast of small or thin features and shaves
+  a little height off every edge.
+- **Speed:** a 640 px preview takes about 1.3 s; a 2048 px download about 20 s
+  (CPU, NumPy). Larger photos are scaled down to 2048 px.
+- Colour channels are denoised independently (no colour TV).
 
 ## [1.1.0] - 2026-11-19
 

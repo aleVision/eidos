@@ -157,3 +157,36 @@ export function detectFace(image: Blob, method: DetectMethod): Promise<FaceSugge
   form.append("method", method);
   return request<FaceSuggestion>("/detect", { method: "POST", body: form });
 }
+
+// 1992 · Total variation (stateless: nothing is stored)
+
+export interface DenoisePreview {
+  image_png: string;
+  noise_png: string;
+  energies: number[];
+  lam: number;
+  width: number;
+  height: number;
+}
+
+function strengthForm(image: Blob, strength: number): FormData {
+  const form = new FormData();
+  form.append("image", image, "image");
+  form.append("strength", String(strength));
+  return form;
+}
+
+export const denoisePreview = (image: Blob, strength: number) =>
+  request<DenoisePreview>("/tv/denoise", { method: "POST", body: strengthForm(image, strength) });
+
+/** The cleaned photo as a PNG file (up to 2048 px on the longer side). */
+export async function denoiseDownload(image: Blob, strength: number): Promise<Blob> {
+  const response = await fetch("/tv/denoise.png", {
+    method: "POST",
+    body: strengthForm(image, strength),
+  });
+  if (!response.ok) throw new ApiError(`Download failed (${response.status})`, response.status);
+  return response.blob();
+}
+
+export const sampleUrl = (noise: number) => `/tv/sample.png?noise=${noise}`;

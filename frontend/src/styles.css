@@ -57,6 +57,14 @@ code, .mono { font-family: var(--f-mono); font-size: 0.9em; }
 .brand { display: flex; align-items: baseline; gap: 12px; }
 .brand h1 { font-size: 1.8rem; letter-spacing: -0.02em; }
 .brand h1 span { color: var(--accent); }
+/* The timeline: one entry per milestone year. */
+.timeline { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.timeline button { display: grid; gap: 2px; text-align: left; font: inherit; color: var(--ink); cursor: pointer;
+  background: var(--panel); border: 1px solid var(--rule); border-left: 4px solid var(--rule); border-radius: 8px; padding: 10px 14px; }
+.timeline button[aria-current="page"] { border-color: var(--accent); background: var(--accent-soft); }
+.timeline .year { font: 700 1.3rem var(--f-display); color: var(--accent); }
+.timeline .title { font: 700 1rem var(--f-display); }
+
 .tabs { display: flex; gap: 4px; flex-wrap: wrap; }
 .tabs button { border: 1px solid var(--rule); background: transparent; color: var(--ink-2);
   padding: 6px 14px; border-radius: 999px; cursor: pointer; font: inherit; }
@@ -117,3 +125,11 @@ table { border-collapse: collapse; width: 100%; font: 0.82rem var(--f-mono); fon
 td, th { padding: 4px 6px; border-bottom: 1px solid var(--rule); text-align: right; }
 td:first-child, th:first-child { text-align: left; }
 .bar { height: 8px; background: var(--series); border-radius: 0 4px 4px 0; }
+
+/* 1992 · Total variation */
+.compare { position: relative; overflow: hidden; border-radius: 6px; cursor: ew-resize; touch-action: none; user-select: none; }
+.compare img { display: block; width: 100%; height: auto; }
+.compare img + img { position: absolute; inset: 0; }
+.compare-divider { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent); transform: translateX(-1px); }
+.compare-label { position: absolute; top: 8px; font: 600 0.72rem var(--f-mono); color: #fff; background: rgba(0, 0, 0, 0.55); padding: 2px 6px; border-radius: 4px; }
+img.tv-noise { width: 100%; height: auto; border-radius: 6px; display: block; }
