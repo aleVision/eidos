@@ -17,7 +17,58 @@ A note on how we version this product, since it's part of the point:
 ## [Unreleased]
 
 ### Planned
-- **3.0.0** — The 1993 milestone.
+- **4.0.0** — The 1994 milestone.
+
+## [3.0.0] - 2026-11-20
+
+The 1993 milestone: robust optical flow, from M. J. Black and P. Anandan, "A
+framework for the robust estimation of optical flow", *ICCV* 1993, pp. 231–236
+(full equations and parameters in the expanded version, *CVIU* 63(1):75–104,
+1996). A new year, so a new MAJOR version; the 1991 and 1992 features and API are
+unchanged.
+
+### Added
+- `eidos_core.flow`: dense motion between two frames. Brightness constancy plus
+  smoothness, each with the robust Lorentzian penalty, so outliers and motion
+  boundaries stop pulling the solution. The quadratic version (Horn & Schunck
+  1981) is kept for comparison. Also outputs data outliers and motion
+  discontinuities.
+- **Model 1993 · solver 1993:** the paper's own minimization: over-relaxation in
+  red-black order (vectorized, tested equal to a pixel-by-pixel sweep), 6 stages of
+  graduated non-convexity and a 3-level pyramid with warping.
+- `eidos_core.synthetic_flow`: the paper's test scene (a textured square moving
+  over a still textured surface) with exact ground truth.
+- API: `POST /flow/estimate` (two frames, smoothness 0.3–10, robust or quadratic)
+  and `GET /flow/sample` (adds both frames, the true motion, and the endpoint and
+  angular errors).
+- Frontend: a 1993 timeline entry with robust and quadratic side by side, a colour
+  key, arrows, the outlier and discontinuity maps, outliers per stage, and the
+  sample's errors.
+
+### Measured choices (where Eidos departs from the paper's numbers)
+- **ω = 1.8, not 1.995:** with 20-40 sweeps per level, 1.995 oscillates and the
+  quadratic solve diverges.
+- **40 sweeps per level, not 20:** at 20 the robust flow was 0.17 px from the truth
+  against 0.07 px when converged; 40 sweeps reach 0.13 px.
+- **Coarse-to-fine only in the first stage:** repeating it every stage, as the
+  paper does, measured no better here.
+- **Discontinuity threshold 0.2 px:** the paper sets it "experimentally".
+- **"10% uniform noise"** in the sample is read as ±10% of the range added to every
+  pixel, which matches the magnitude and order of the paper's Table 1.
+- **No data term where there is no measurement:** where the warp leaves frame 1
+  and on the outer pixel ring. Without this, border flow ran off to 59 px for a
+  2 px motion.
+
+### Known limitations
+- **Large motions:** 3 pyramid levels catch a few pixels at the 240 px preview
+  size; a 20 px jump is not recovered (the outlier fraction rises instead).
+- **Brightness changes** (shadows, exposure) break brightness constancy: they show
+  up as data outliers.
+- **Textureless regions** carry no motion information; the smoothness term fills
+  them in.
+- **Speed:** grey only, previews at 240 px; about 2 s per robust solve (CPU,
+  NumPy).
+- With noise, the discontinuity map has many false marks.
 
 ## [2.0.1] - 2026-11-20
 
