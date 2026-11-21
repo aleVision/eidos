@@ -3,6 +3,7 @@ import { getHealth } from "./api/client";
 import ModelView from "./views/ModelView";
 import PeopleView from "./views/PeopleView";
 import RecognizeView from "./views/RecognizeView";
+import FlowView from "./views/FlowView";
 import TotalVariationView from "./views/TotalVariationView";
 
 type Status =
@@ -21,6 +22,11 @@ const MILESTONES = [
     year: 1992,
     title: "Total variation",
     description: "Remove noise while keeping edges sharp (Rudin, Osher & Fatemi)",
+  },
+  {
+    year: 1993,
+    title: "Robust optical flow",
+    description: "See how every pixel moves, and where motion breaks (Black & Anandan)",
   },
 ] as const;
 type Year = (typeof MILESTONES)[number]["year"];
@@ -99,6 +105,7 @@ export default function App() {
         </>
       )}
       {year === 1992 && <TotalVariationView />}
+      {year === 1993 && <FlowView />}
     </main>
   );
 }

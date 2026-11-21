@@ -2,7 +2,7 @@
 
 A computer vision product that grows one historical milestone per year.
 
-Each major version of Eidos adds a working feature built on an important computer vision development from a successive year: version 1 brings 1991, version 2 brings 1992, and so on. Every feature is implemented from the original idea and explains itself in the interface, so you can see *how* it works, not only *that* it works. Eidos runs entirely on your own machine.
+Each major version of Eidos adds a working feature built on an important computer vision development from a successive year: version 1 brings 1991, version 2 brings 1992, version 3 brings 1993, and so on. Every feature is implemented from the original idea and explains itself in the interface, so you can see *how* it works, not only *that* it works. Eidos runs entirely on your own machine.
 
 The interface is a timeline: pick a year, use that year's milestone.
 
@@ -10,6 +10,7 @@ The interface is a timeline: pick a year, use that year's milestone.
 |------|-----------|-------|
 | 1991 | Eigenfaces: recognize and find faces | 1.0.0 |
 | 1992 | Total variation: remove noise, keep edges | 2.0.0 |
+| 1993 | Robust optical flow: see how every pixel moves | 3.0.0 |
 
 ## 1991: Eigenfaces
 
@@ -29,6 +30,16 @@ Based on L. I. Rudin, S. Osher and E. Fatemi, "Nonlinear total variation based n
 - Download the cleaned photo as PNG (up to 2048 px on the longer side, about 23 s; up to 45 s at the strongest settings).
 - Model 1992 · solver 2011: the minimum is found with Chambolle & Pock's accelerated primal-dual algorithm, checked in the tests against the paper's gradient flow.
 - Limits: strong settings cause "staircasing" (gradients become flat steps) and lower the contrast of small details.
+
+## 1993: Robust optical flow
+
+Based on M. J. Black and P. Anandan, "A framework for the robust estimation of optical flow", *ICCV* 1993 (expanded in *CVIU* 63(1):75–104, 1996).
+
+- Find how every pixel moves between two frames. Squared errors (Horn & Schunck, 1981) let one bad measurement or a moving object's edge pull everything; a robust penalty stops trusting large errors, so motion boundaries stay sharp.
+- Use the paper's test scene (a textured square moving over a still surface, with adjustable motion and noise, scored against the true motion) or two photos of your own taken a moment apart.
+- Compare robust and quadratic side by side, with arrows, the data outliers ("brightness constancy fails here") and the motion discontinuities, and watch outliers drop out over the 6 graduated non-convexity stages.
+- Model 1993 · solver 1993: the paper's over-relaxation, graduated non-convexity and coarse-to-fine warping. The CHANGELOG lists where Eidos departs from the paper's numbers, and why (measured).
+- Limits: grey only, 240 px previews (about 2 s), motions of a few pixels; brightness changes and textureless areas break the assumptions.
 
 ## Architecture
 
@@ -84,7 +95,7 @@ Open http://127.0.0.1:5173.
 3. **Recognize** → click any ORL test photo, or upload your own photo.
 4. When you upload a photo, click **Enable face detection** once: from then on Eidos suggests the face box (check it, or drag to redraw). Tick **Show face map** to see ε at every position.
 
-For 1992, choose **1992 · Total variation** in the timeline and click **Use the sample**.
+For 1992, choose **1992 · Total variation** in the timeline and click **Use the sample**. For 1993, choose **1993 · Robust optical flow**: the paper's test runs at once; try more noise, or two burst photos of your own.
 
 ### Tests and checks
 
@@ -110,7 +121,8 @@ Settings can be overridden with `EIDOS_*` environment variables or `backend/.env
 - **1.0.0 (1991)** — Eigenfaces recognition, with manual face boxes. ✅
 - **1.1.0 (1991)** — Suggested face boxes with the paper's distance-from-face-space map. ✅
 - **2.0.0 (1992)** — Total variation denoising (Rudin, Osher & Fatemi). ✅
-- **3.0.0 (1993)** — The next year's milestone.
+- **3.0.0 (1993)** — Robust optical flow (Black & Anandan). ✅
+- **4.0.0 (1994)** — The next year's milestone.
 
 See `CHANGELOG.md` for version history.
 
