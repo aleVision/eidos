@@ -54,7 +54,9 @@ unchanged.
   paper does, measured no better here.
 - **Discontinuity threshold 0.2 px:** the paper sets it "experimentally".
 - **"10% uniform noise"** in the sample is read as ±10% of the range added to every
-  pixel, which matches the magnitude and order of the paper's Table 1.
+  pixel. It reproduces the order of the paper's Table 1 (robust better than
+  quadratic), not its magnitude: RMS horizontal error 0.36 vs 0.55 here, against
+  0.10 vs 0.18 in the paper (different textures; the paper's are not published).
 - **No data term where there is no measurement:** where the warp leaves frame 1
   and on the outer pixel ring. Without this, border flow ran off to 59 px for a
   2 px motion.

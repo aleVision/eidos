@@ -29,8 +29,9 @@ def two_surfaces(
 
     `noise` adds uniform random values of up to ±noise·255 to every pixel of frame 2.
     The paper's "10% uniform random noise" is ambiguous; read as ±10% of the range,
-    its error levels (RMS horizontal flow 0.18 quadratic vs 0.10 robust) are matched
-    in magnitude and order here, while replacing 10% of the pixels is far harsher.
+    it reproduces the order of the paper's Table 1 (robust better than quadratic) but
+    not its magnitude (RMS horizontal error 0.36 vs 0.55 here, 0.10 vs 0.18 in the
+    paper). Replacing 10% of the pixels instead is far harsher.
     Returns frame1, frame2 (float32, 0-255) and the true flow
     (u, v) indexed at frame 2's pixels, as the solver reports it: the square moves
     left, so the truth marks where the square is in frame 2.
