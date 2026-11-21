@@ -26,8 +26,8 @@ Based on L. I. Rudin, S. Osher and E. Fatemi, "Nonlinear total variation based n
 
 - Of all images close to the noisy photo, keep the one whose brightness changes least overall: noise goes, edges stay sharp.
 - Upload a photo or use the synthetic sample (with adjustable noise), move the strength slider, and compare before/after with a draggable divider. See the noise that was removed and the energy falling per iteration.
-- Download the cleaned photo as PNG (up to 2048 px on the longer side, about 20 s).
-- Model 1992 · solver 2004: the minimum is found with Chambolle's dual algorithm, checked in the tests against the paper's gradient flow.
+- Download the cleaned photo as PNG (up to 2048 px on the longer side, about 23 s; up to 45 s at the strongest settings).
+- Model 1992 · solver 2011: the minimum is found with Chambolle & Pock's accelerated primal-dual algorithm, checked in the tests against the paper's gradient flow.
 - Limits: strong settings cause "staircasing" (gradients become flat steps) and lower the contrast of small details.
 
 ## Architecture

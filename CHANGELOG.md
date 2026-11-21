@@ -19,6 +19,24 @@ A note on how we version this product, since it's part of the point:
 ### Planned
 - **3.0.0** — The 1993 milestone.
 
+## [2.0.1] - 2026-11-20
+
+### Fixed
+- **Strong settings looked blurry.** Chambolle's 2004 solver needs far more than
+  100 iterations when λ is small: at λ = 2 an edge came out about 9 px wide
+  instead of 1 px, and the energy was 12% above its minimum. The blur was the
+  unfinished solver, not the ROF model. Eidos now uses Chambolle & Pock's
+  accelerated primal-dual algorithm (2011). Its error falls like 1/(λ·k²), so the
+  number of iterations now grows like 1/√λ: 100 for λ ≥ 4, up to 200 at λ = 1.
+  Across the whole slider the result is within a few grey levels (at most about
+  7 of 255) of the converged one (tested). The energy falls overall but may
+  wobble slightly: an accelerated method is not a descent method. Speed at λ = 8 is about the same (preview ≈ 1.7 s, 2048 px
+  download ≈ 23 s); the strongest setting takes up to twice as long (≈ 2.9 s and
+  ≈ 44 s).
+- **The "settled / still moving" note was misleading.** A small change over the
+  last iterations does not prove a slow solver is near the minimum. The note now
+  states what the tests check instead.
+
 ## [2.0.0] - 2026-11-19
 
 The 1992 milestone: total variation denoising, from L. I. Rudin, S. Osher and
@@ -30,7 +48,7 @@ features and API are unchanged.
 - `eidos_core.denoise`: the ROF model, minimizing E(u) = Σ|∇u| + (λ/2)·Σ(u − f)².
   Removes noise but keeps edges sharp, which blurring cannot do (tested against
   Gaussian blur at equal noise reduction).
-- **Model 1992 · solver 2004.** The energy is the 1992 contribution; to find its
+- **Model 1992 · solver 2004** (replaced in 2.0.1). The energy is the 1992 contribution; to find its
   minimum Eidos uses Chambolle's dual algorithm (2004), simpler and more stable
   than the paper's gradient flow. The tests check it against that gradient flow.
 - API: `POST /tv/denoise` (preview, up to 640 px, with the removed noise and the

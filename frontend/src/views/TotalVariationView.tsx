@@ -4,7 +4,7 @@ import CompareSlider from "../components/CompareSlider";
 import LineChart from "../components/LineChart";
 
 // Strength slider (0 = gentle, 100 = strong) on a log scale of λ from 64 to 1:
-// the range where 100 solver iterations settle (measured). Larger λ stays closer
+// across this whole range, the default 100-200 solver iterations land near the minimum (tested). Larger λ stays closer
 // to the photo; smaller λ removes more.
 const LAM_GENTLE = 64;
 const LAM_STRONG = 1;
@@ -94,11 +94,6 @@ export default function TotalVariationView() {
 
   const energies = result?.energies ?? [];
   const energyPoints = energies.map((e, i) => [i + 1, e] as [number, number]);
-  const settled =
-    energies.length > 10
-      ? Math.abs(energies[energies.length - 11] - energies[energies.length - 1]) /
-        energies[energies.length - 1]
-      : null;
 
   return (
     <div className="view">
@@ -110,7 +105,7 @@ export default function TotalVariationView() {
           costs only its height. So noise goes and edges stay sharp, which blurring cannot do.
         </p>
         <p className="mono">E(u) = Σ|∇u| + (λ/2)·Σ(u − f)²</p>
-        <p className="small muted">Model 1992 · solver 2004 (Chambolle's dual algorithm).</p>
+        <p className="small muted">Model 1992 · solver 2011 (Chambolle &amp; Pock's accelerated primal-dual algorithm).</p>
       </section>
 
       <div className="cols-2">
@@ -161,7 +156,7 @@ export default function TotalVariationView() {
           </p>
           <div className="row">
             <button className="btn primary" disabled={!source || downloading} onClick={download}>
-              {downloading ? "Working… (up to ~20 s)" : "Download cleaned photo"}
+              {downloading ? "Working… (up to ~45 s)" : "Download cleaned photo"}
             </button>
             <span className="small muted">PNG, up to 2048 px on the longer side.</span>
           </div>
@@ -201,13 +196,15 @@ export default function TotalVariationView() {
                 yFormat={(v) => (v >= 1000 ? `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : v.toFixed(0))}
               />
             )}
-            <p className="small muted">
-              The solver lowers E(u) step by step.
-              {settled !== null &&
-                ` Over the last 10 iterations it changed ${(settled * 100).toFixed(2)}%: ${
-                  settled < 0.01 ? "settled." : "still moving; the result is close but not final."
-                }`}
-            </p>
+            {energies.length > 0 && (
+              <p className="small muted">
+                The solver lowers E(u) overall; an accelerated method may wobble slightly on the way.
+                Eidos stops after {energies.length} iterations (more for stronger settings); the tests
+                check that this lands within a few grey levels (at most about 7 of 255) of the true
+                minimum across the whole strength range. A small change per step alone would not
+                prove that.
+              </p>
+            )}
           </section>
         </div>
       )}
